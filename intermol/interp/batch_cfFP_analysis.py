@@ -1,7 +1,7 @@
 import argparse
 
 from pathlib import Path
-from concept_fp import ConceptFromFingerprintBatchAnalysis
+from .concept_fp import ConceptFromFingerprintBatchAnalysis
 
 def main():
     parser = argparse.ArgumentParser(

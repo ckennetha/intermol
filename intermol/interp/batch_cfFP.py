@@ -1,5 +1,5 @@
 import argparse
-from concept_fp import ConceptFromFingerprint
+from .concept_fp import ConceptFromFingerprint
 
 def main():
     parser = argparse.ArgumentParser(

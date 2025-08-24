@@ -7,9 +7,9 @@ from pytorch_lightning.loggers import WandbLogger
 from datetime import datetime
 from glob import glob
 
-from data_utils import MolDataModule
-from sae_module import SAEModule
-from config import *
+from .data_utils import MolDataModule
+from .sae_module import SAEModule
+from .config import *
 
 def main():
     ptl.seed_everything(SEED)

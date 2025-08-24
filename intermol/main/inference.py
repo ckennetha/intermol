@@ -1,7 +1,7 @@
 import torch
 
-from sae import SparseAutoencoder
-from utils import load_model, load_hf_model
+from .sae import SparseAutoencoder
+from .utils import load_model, load_hf_model
 
 class SAEInferenceModule():
     def __init__(

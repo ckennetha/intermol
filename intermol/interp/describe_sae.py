@@ -10,7 +10,7 @@ from tqdm import tqdm
 from typing import Optional
 
 from ..main.utils import load_hf_model
-from label_utils import map_atom_token_idx
+from .label_utils import map_atom_token_idx
 
 def describe(
     dataset_pth: str, acts_h5_pth: str, output_fp_dataset: bool=False,

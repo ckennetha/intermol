@@ -16,8 +16,8 @@ import polars as pl
 from tqdm import tqdm
 from typing import Optional
 
-from sae import SparseAutoencoder
-from utils import load_model, load_hf_model
+from .sae import SparseAutoencoder
+from .utils import load_model, load_hf_model
 
 @torch.no_grad()
 def calc_feats_stats(

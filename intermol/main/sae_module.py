@@ -7,8 +7,8 @@ https://doi.org/10.1101/2025.02.06.636901
 import torch
 import pytorch_lightning as ptl
 
-from sae import SparseAutoencoder, loss_fn
-from utils import load_hf_model, diff_cross_entropy
+from .sae import SparseAutoencoder, loss_fn
+from .utils import load_hf_model, diff_cross_entropy
 
 class SAEModule(ptl.LightningModule):
     def __init__(

@@ -1,8 +1,9 @@
 import multiprocessing as mp
 import polars as pl
 import pytorch_lightning as ptl
+
 from torch.utils.data import Dataset, DataLoader
-from utils import train_val_test_split
+from .utils import train_val_test_split
 
 class MolDataset(Dataset):
     def __init__(
