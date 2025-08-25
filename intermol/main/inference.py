@@ -8,13 +8,14 @@ class SAEInferenceModule():
         self, sae_weight: str, sae_exp_f: int, sae_k: int,
         layer_idx: int, base: str='ibm/MoLFormer-XL-both-10pct'
     ):
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        
         self.tokenizer, self.base_model = load_hf_model(base)
+        self.base_model.to(self.device)
 
         self.sae = SparseAutoencoder(exp_f=sae_exp_f, k=sae_k)
-        self.sae = load_model(self.sae, sae_weight)
+        self.sae = load_model(self.sae, sae_weight).to(self.device)
         self.layer_idx = layer_idx
-
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     def tokenize(self, smi: str) -> list[str]:
         return self.tokenizer.tokenize(smi)
