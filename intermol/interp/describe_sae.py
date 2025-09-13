@@ -10,11 +10,20 @@ from tqdm import tqdm
 from typing import Optional
 
 from ..main.utils import load_hf_model
-from .label_utils import map_atom_token_idx
+from .label_utils import (
+    _RX_BOND,
+    _RX_BRANCH,
+    _RX_RING,
+    map_atom_token_idx
+)
 
 def describe(
-    dataset_pth: str, acts_h5_pth: str, output_fp_dataset: bool=False,
-    threshold: Optional[float]=0.0, out_prefix: Optional[str]=None, outdir_pth: Optional[str]=None
+    dataset_pth: str,
+    acts_h5_pth: str,
+    output_fp_dataset: bool=False,
+    threshold: Optional[float]=0.0,
+    out_prefix: Optional[str]=None,
+    outdir_pth: Optional[str]=None,
 ) -> None:
     # validate outdir_pth
     if outdir_pth:
@@ -48,7 +57,6 @@ def describe(
             "activatingMolecule": 0,
             "tokenType": Counter(), #Atom, Bond, Branches, Rings, or Disconnections
             "activatingToken": Counter(), #Tokens
-            "patternActivation": Counter() #Single or Multiple
         } for f in list(range(n_features))}
         
         if output_fp_dataset:
@@ -115,11 +123,6 @@ def describe(
                     
                     for tok_idx in nz_indices:
                         counts[f]["activatingToken"][tokens[tok_idx]] += 1
-                    
-                    if len(nz_indices) == 1:
-                        counts[f]["patternActivation"]["single"] += 1
-                    else:
-                        counts[f]["patternActivation"]["multiple"] += 1
 
                     if output_fp_dataset:
                         atom_idx = [inv_mapper[tok_idx] for tok_idx in nz_indices if tok_idx in inv_mapper]
@@ -143,13 +146,13 @@ def describe(
     # counts to dict
     for f in tqdm(counts, desc="Generating feature statistics..."):
         for token, n_tokens in counts[f]["activatingToken"].items():
-            if token in {"(", ")"}:
+            if _RX_RING.fullmatch(token):
                 counts[f]["tokenType"]["branch"] += n_tokens
-            elif re.fullmatch(r'[\-=#\\\/]', token):
+            elif _RX_BOND.fullmatch(token):
                 counts[f]["tokenType"]["bond"] += n_tokens
             elif token == ".":
                 counts[f]["tokenType"]["discon"] += n_tokens
-            elif re.fullmatch(r'(\%[0-9]{2}|[0-9])', token):
+            elif _RX_BRANCH.fullmatch(token):
                 counts[f]["tokenType"]["ring"] += n_tokens
             else:
                 counts[f]["tokenType"]["atom"] += n_tokens
@@ -174,10 +177,10 @@ def main():
             and activatingMolecule. Additionally, if `output_fp_dataset` is set, a dataset
             for ConceptFromFingerprint will also be generated.
         '''
-        )
+    )
     
     parser.add_argument('--dataset', type=str, required=True, help='Path to Smiles dataset. Supported ext.: .txt.')
-    parser.add_argument('--activations', type=str, default=None, help='Path to precomputed dataset activations. '
+    parser.add_argument('--activations', type=str, required=True, help='Path to precomputed dataset activations. '
                         'Supported ext.: .h5.')
     parser.add_argument('--output_fp_dataset', action='store_true', help='If set, also process data to generate a '
                         'dataset for ConceptFromFingerprint. Default: False.')
