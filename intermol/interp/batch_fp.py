@@ -1,5 +1,9 @@
 import argparse
-from .concept_fp import ConceptFromFingerprint
+from rdkit import RDLogger
+
+from .concept_fp_utils import ConceptFromFingerprint
+
+RDLogger.DisableLog('rdApp.*')
 
 def main():
     parser = argparse.ArgumentParser(
@@ -34,23 +38,23 @@ def main():
 
     # init FP generator
     cff = ConceptFromFingerprint(
-        fptype=args.fptype,
-        fpsize=args.fpsize,
-        radius=args.radius,
-        minpath=args.minpath,
-        maxpath=args.maxpath,
+        args.fptype,
+        args.fpsize,
+        args.radius,
+        args.minpath,
+        args.maxpath,
         countSimulation=args.count_simulation,
         includeChirality=args.chirality
     )
     
     cff.run_batch(
-        dataset_pth=args.dataset,
-        output_type=args.output_type,
-        output_drawing=args.output_drawing,
-        top_frequent_bits=args.top_frequent_bits,
-        num_workers=args.num_workers,
-        outdir_pth=args.outdir,
-        out_prefix=args.out_prefix
+        args.dataset,
+        args.output_type,
+        args.top_frequent_bits,
+        args.output_drawing,
+        args.outdir,
+        args.out_prefix,
+        args.num_workers
     )
 
 

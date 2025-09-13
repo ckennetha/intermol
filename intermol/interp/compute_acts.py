@@ -12,19 +12,23 @@ from typing import Callable
 from ..main.inference import SAEInferenceModule
 
 def get_clean_acts(smiles: str, sae_module: Callable) -> torch.Tensor:
-    _, sae_acts = sae_module.get_all(smi=smiles)
+    _, sae_acts = sae_module.get_all(smiles)
     return sae_acts.squeeze()[1:-1, :]
 
 def run(
-    samples: list[str], sae_module: Callable, chunk_size: int=1024,
-    outdir_pth: str='.', out_prefix: str=None
+    samples: list[str],
+    sae_module: Callable,
+    chunk_size: int = 1024,
+    outdir_pth: str = '.',
+    out_prefix: str = None
 ) -> None:
     n_samples = len(samples)
     n_features = sae_module.sae.hidden_dim
     n_chunks = math.ceil(n_samples / chunk_size)
 
     out_raw = h5py.File(
-        os.path.join(outdir_pth, f'{out_prefix + "_" if out_prefix else ""}raw_acts.h5'), 'w'
+        os.path.join(outdir_pth, f'{out_prefix + "_" if out_prefix else ""}raw_acts.h5'),
+        'w'
     )
 
     out_raw.attrs['dtype'] = 'csc_matrix'
@@ -76,7 +80,6 @@ def main():
     parser = argparse.ArgumentParser(
         description='Compute activations for a given set of molecules and save their sparse represntation in HDF5 format.'
     )
-    
     parser.add_argument('--dataset', type=str, required=True, help='Path to Smiles dataset. Supported ext.: .txt.')
     parser.add_argument('--sae_exp_f', type=int,  required=True, help='SAE expansion factor.')
     parser.add_argument('--sae_k', type=int,  required=True, help='SAE K in top-K activations calculation.')
@@ -88,6 +91,7 @@ def main():
 
     args = parser.parse_args()
 
+
     # set up dataset
     print('Set up dataset...')
     with open(args.dataset, 'r') as h:
@@ -96,17 +100,15 @@ def main():
     # init tokenizer and models
     print('Initialize tokenizer and models...')
     SAEInference = SAEInferenceModule(
-        sae_weight=args.sae_ckpt, sae_exp_f=args.sae_exp_f, sae_k=args.sae_k,
-        layer_idx=args.layer_idx, base='ibm/MoLFormer-XL-both-10pct'
+        args.sae_ckpt,
+        args.sae_exp_f,
+        args.sae_k,
+        args.layer_idx,
+        base='ibm/MoLFormer-XL-both-10pct',
+        device="cuda" if torch.cuda.is_available() else "cpu"
     )
 
-    run(
-        samples=smiles,
-        sae_module=SAEInference,
-        chunk_size=args.chunk_size,
-        outdir_pth=args.outdir,
-        out_prefix=args.out_prefix
-    )
+    run(smiles, SAEInference, args.chunk_size, args.outdir, args.out_prefix)
 
 
 if __name__ == '__main__':

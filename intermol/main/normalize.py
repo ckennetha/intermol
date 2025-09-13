@@ -20,18 +20,13 @@ from .sae import SparseAutoencoder
 from .utils import load_model, load_hf_model
 
 @torch.no_grad()
-def calc_feats_stats(
-    sae: torch.nn.Module,
-    mol_embs: torch.Tensor
-) -> torch.Tensor:
+def calc_feats_stats(sae: torch.nn.Module, mol_embs: torch.Tensor) -> torch.Tensor:
     acts, _, _ = sae.encode(mol_embs)
     max_acts, _ = torch.max(acts, dim=0)
     return max_acts
 
 @torch.no_grad()
-def normalize(
-    sae: torch.nn.Module, max_per_feat: torch.Tensor
-) -> torch.nn.Module:
+def normalize(sae: torch.nn.Module, max_per_feat: torch.Tensor) -> torch.nn.Module:
     sae.w_enc.div_(max_per_feat.unsqueeze(0))
     sae.w_enc[sae.w_enc.isinf()] = 0
     
@@ -48,9 +43,9 @@ def normalize_sae(
     sae_k: int,
     sae_ckpt_pth: str,
     layer_idx: int,
-    chunk_size: int=1000,
-    base: str='ibm/MoLFormer-XL-both-10pct',
-    outdir_pth: Optional[str]=None
+    chunk_size: int = 1000,
+    base: str = 'ibm/MoLFormer-XL-both-10pct',
+    outdir_pth: Optional[str] = None
 ) -> None:
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     
@@ -60,10 +55,7 @@ def normalize_sae(
     base_model.to(device)
     
     print("Loading SAE model...")
-    sae = SparseAutoencoder(
-        exp_f=sae_exp_f,
-        k=sae_k
-    )
+    sae = SparseAutoencoder(exp_f=sae_exp_f, k=sae_k)
     sae = load_model(sae, sae_ckpt_pth)
     sae.to(device)
 
@@ -112,7 +104,7 @@ def normalize_sae(
     out_fn = os.path.join(
         outdir_pth,
         f'norm-sae_max_per_feature_{n_samples}s_{n_tokens}t.npy'
-        )
+    )
     np.save(out_fn, max_per_feat.cpu().numpy())
     print(f'Max activations per feature saved to {out_fn}.')
 
@@ -122,7 +114,7 @@ def normalize_sae(
     out_sae_fn = os.path.join(
         outdir_pth,
         f'norm-sae_state-dict_{n_samples}s_{n_tokens}t.pt'
-        )
+    )
     torch.save(sae_normalized.state_dict(), out_sae_fn)
     print(f"Normalized model saved to {out_sae_fn}")
 
@@ -146,8 +138,7 @@ def main():
         activation value for each feature is 1 across the provided dataset
         (InterPLM, Simon & Zou 2025).
         '''
-        )
-
+    )
     parser.add_argument('--dataset', type=str, required=True, help='Path to SMILES dataset. Supported ext.: PARQUET.')
     parser.add_argument('--col_sele', type=str, required=True, help='Column name for SMILES data.')
     parser.add_argument('--sae_exp_f', type=int, required=True, help='SAE expansion factor.')
@@ -160,6 +151,7 @@ def main():
     parser.add_argument('--outdir', type=str, help='Output directory. Default: current directory.')
     
     args = parser.parse_args()
+
 
     # set up data
     random.seed(args.seed)
@@ -174,11 +166,11 @@ def main():
 
     # normalize sae
     normalize_sae(
-        dataset=samples,
-        sae_exp_f=args.sae_exp_f,
-        sae_k=args.sae_k,
-        sae_ckpt_pth=args.sae_ckpt,
-        layer_idx=args.layer_idx,
+        samples,
+        args.sae_exp_f,
+        args.sae_k,
+        args.sae_ckpt,
+        args.layer_idx,
         chunk_size=args.chunk_size,
         outdir_pth=args.outdir
     )

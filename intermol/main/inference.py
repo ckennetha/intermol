@@ -5,10 +5,15 @@ from .utils import load_model, load_hf_model
 
 class SAEInferenceModule():
     def __init__(
-        self, sae_weight: str, sae_exp_f: int, sae_k: int,
-        layer_idx: int, base: str='ibm/MoLFormer-XL-both-10pct'
+        self,
+        sae_weight: str,
+        sae_exp_f: int,
+        sae_k: int,
+        layer_idx: int,
+        base: str = 'ibm/MoLFormer-XL-both-10pct',
+        device: str = "cpu",
     ):
-        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        self.device = torch.device(device)
         
         self.tokenizer, self.base_model = load_hf_model(base)
         self.base_model.to(self.device)
@@ -32,7 +37,11 @@ class SAEInferenceModule():
         return out_base, acts_sae
     
     def get_steered(
-        self, smi: str, factor: int, latent_idx: int, return_baseline: bool=False
+        self,
+        smi: str,
+        factor: int,
+        latent_idx: int,
+        return_baseline: bool = False
     ) -> tuple:
         enc = self.tokenize_to_tensor(smi)
         out_base = self.get_base_out(enc)
@@ -48,7 +57,7 @@ class SAEInferenceModule():
         else:
             return sae_logits
 
-    def steer(self, acts_base, latent_idx: int, factor: int=1):
+    def steer(self, acts_base, latent_idx: int, factor: int = 1):
         acts, mu, std = self.sae.encode(acts_base)
         acts[:, :, latent_idx] *= factor
         recons = self.sae.decode(acts, mu, std)

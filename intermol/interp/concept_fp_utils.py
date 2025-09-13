@@ -8,32 +8,39 @@ from functools import partial
 from msgpack import Unpacker, Packer
 from pathlib import Path
 from PIL.PngImagePlugin import PngImageFile
-from rdkit import Chem, RDLogger
+from rdkit import Chem
 from rdkit.Chem import AllChem, Draw
 from tqdm import tqdm
 from typing import Optional, Union, Callable
-
-RDLogger.DisableLog('rdApp.*')
 
 def to_molecule(smi: str) -> Chem.Mol:
     return Chem.MolFromSmiles(smi)
 
 def calculate(
-    fpgen: Callable, fpgen_type: str, mol: Chem.Mol,
-    fromAtoms: list[int]=[], ignoreAtoms: list[int]=[]
+    fpgen: Callable,
+    fpgen_type: str,
+    mol: Chem.Mol,
+    fromAtoms: list[int] = [],
+    ignoreAtoms: list[int] = []
 ) -> dict[int, tuple[tuple[int, int]]]:
     ao = AllChem.AdditionalOutput()
     
     if fpgen_type == "morgan":
         ao.CollectBitInfoMap()
         _ = fpgen.GetFingerprint(
-            mol, fromAtoms=fromAtoms, ignoreAtoms=ignoreAtoms, additionalOutput=ao
+            mol,
+            fromAtoms=fromAtoms,
+            ignoreAtoms=ignoreAtoms,
+            additionalOutput=ao
         )
         return ao.GetBitInfoMap()
     else:
         ao.CollectBitPaths()
         _ = fpgen.GetFingerprint(
-            mol, fromAtoms=fromAtoms, ignoreAtoms=ignoreAtoms, additionalOutput=ao
+            mol,
+            fromAtoms=fromAtoms,
+            ignoreAtoms=ignoreAtoms,
+            additionalOutput=ao
         )
         return ao.GetBitPaths()
 
@@ -45,9 +52,12 @@ def draw_morgan(mol: Chem.Mol, bi: dict[int, tuple[tuple[int, int]]]) -> PngImag
     )
 
 def get_fragment(
-    fptype: str, mol: Chem.Mol, output_type: str='smiles',
-    rootedAtAtoms: Optional[list[int]]=None, radius: Optional[int]=None,
-    bondsInPaths: Optional[list[int]]=None
+    fptype: str,
+    mol: Chem.Mol,
+    output_type: str = 'smiles',
+    rootedAtAtoms: Optional[list[int]] = None,
+    radius: Optional[int] = None,
+    bondsInPaths: Optional[list[int]] = None
 ) -> str:
     fragmentor = Chem.MolFragmentToSmiles if output_type == 'smiles' else Chem.MolFragmentToSmarts
 
@@ -76,12 +86,16 @@ def get_fragment(
             bond = mol.GetBondWithIdx(bond_idx)
             atoms.add(bond.GetBeginAtomIdx())
             atoms.add(bond.GetEndAtomIdx())
-
         return fragmentor(mol, atomsToUse=list(atoms), bondsToUse=list(bondsInPaths))
 
 def init_fpgen(
-    fptype: str='morgan_rdkit', fpsize: int=2048, radius: int=2, minPath:int=1, maxpath: int=4,
-    countSimulation: bool=False, includeChirality: bool=False
+    fptype: str = 'morgan_rdkit',
+    fpsize: int = 2048,
+    radius: int = 2,
+    minPath:int = 1,
+    maxpath: int = 4,
+    countSimulation: bool = False,
+    includeChirality: bool = False
 ) -> None:
     global FPGEN
     FPGEN = dict()
@@ -89,7 +103,8 @@ def init_fpgen(
     if fptype in ['morgan', 'morgan_rdkit']:
         # init Morgan FP
         FPGEN["morgan"] = AllChem.GetMorganGenerator(
-            radius=radius, fpSize=fpsize,
+            radius=radius,
+            fpSize=fpsize,
             countSimulation=countSimulation,
             includeChirality=includeChirality
         )
@@ -97,29 +112,28 @@ def init_fpgen(
     if fptype in ['rdkit', 'morgan_rdkit']:
         # init RDKit FP
         FPGEN["rdkit"] = AllChem.GetRDKitFPGenerator(
-            minPath=minPath, maxPath=maxpath, fpSize=fpsize,
+            minPath=minPath,
+            maxPath=maxpath,
+            fpSize=fpsize,
             countSimulation=countSimulation
         )
 
 def wrap_single(
-    fptype: str, mol: Chem.Mol, fromAtoms: list[int]=[], ignoreAtoms: list[int]=[],
-    output_drawing: bool=False
+    fptype: str,
+    mol: Chem.Mol,
+    fromAtoms: list[int] = [],
+    ignoreAtoms: list[int] = [],
+    output_drawing: bool = False
 ) -> dict[str, dict[int, tuple[tuple[int, int]]]]:
     global FPGEN
     result = {}
 
     if fptype in ['morgan', 'morgan_rdkit']:
-        bi = calculate(
-            fpgen=FPGEN["morgan"], fpgen_type="morgan", mol=mol,
-            fromAtoms=fromAtoms, ignoreAtoms=ignoreAtoms
-        )
+        bi = calculate(FPGEN["morgan"], "morgan", mol, fromAtoms, ignoreAtoms)
         result["bits_morgan"] = bi
     
     if fptype in ['rdkit', 'morgan_rdkit']:
-        bp = calculate(
-            fpgen=FPGEN["rdkit"], fpgen_type="rdkit", mol=mol,
-            fromAtoms=fromAtoms, ignoreAtoms=ignoreAtoms
-        )
+        bp = calculate(FPGEN["rdkit"], "rdkit", mol, fromAtoms, ignoreAtoms)
         result["bits_rdkit"] = bp
 
     if output_drawing and (fptype in ['morgan', 'morgan_rdkit']):
@@ -129,9 +143,14 @@ def wrap_single(
     return result
 
 def wrap_batch(
-    fptype: str, smiles: list[str], fromAtoms: list[list[int]]=[], ignoreAtoms: list[list[int]]=[],
-    top_frequent_bits: int=1, output_type: str='smiles', output_drawing: bool=False,
-    f: Optional[str]=None
+    fptype: str,
+    smiles: list[str],
+    fromAtoms: list[list[int]] = [],
+    ignoreAtoms: list[list[int]] = [],
+    top_frequent_bits: int = 1,
+    output_type: str = 'smiles',
+    output_drawing: bool = False,
+    f: Optional[str] = None
 ) -> dict:
     global FPGEN
     n_smi = len(smiles)
@@ -148,8 +167,7 @@ def wrap_batch(
     for i, smi in enumerate(smiles):
         mol = to_molecule(smi)
         result = wrap_single(
-            fptype=fptype, mol=mol, fromAtoms=fromAtoms[i],
-            ignoreAtoms=ignoreAtoms[i], output_drawing=output_drawing
+            fptype, mol, fromAtoms[i], ignoreAtoms[i], output_drawing
         )
         
         if fptype in {'morgan', 'morgan_rdkit'}:
@@ -200,8 +218,13 @@ def wrap_batch(
 
 class ConceptFromFingerprint():
     def __init__(
-        self, fptype: str='morgan_rdkit', fpsize: int=2048,
-        radius: int=2, minpath:int=1, maxpath: int=4, **kwargs
+        self,
+        fptype: str = 'morgan_rdkit',
+        fpsize: int = 2048,
+        radius: int = 2,
+        minpath: int = 1,
+        maxpath: int = 4,
+        **kwargs
     ):
         # sanity check
         try:
@@ -219,24 +242,36 @@ class ConceptFromFingerprint():
         self.includeChirality = kwargs.get("includeChirality", False)
     
     def run_single(
-        self, smi: str, fromAtoms: list[int]=[], ignoreAtoms: list[int]=[],
-        output_drawing: bool=False
+        self,
+        smi: str,
+        fromAtoms: list[int] = [],
+        ignoreAtoms: list[int] = [],
+        output_drawing: bool = False
     ) -> dict[str, dict[int, tuple[tuple[int, int]]]]:
         init_fpgen(
-            self.fptype, self.fpsize, self.radius, self.minpath, self.maxpath,
-            self.countSimulation, self.includeChirality
+            self.fptype,
+            self.fpsize,
+            self.radius,
+            self.minpath,
+            self.maxpath,
+            self.countSimulation,
+            self.includeChirality
         )
         mol = to_molecule(smi)
         
         return wrap_single(
-            fptype=self.fptype, mol=mol, fromAtoms=fromAtoms,
-            ignoreAtoms=ignoreAtoms, output_drawing=output_drawing
+            self.fptype, mol, fromAtoms, ignoreAtoms, output_drawing
         )
     
     def run_batch(
-        self, dataset_pth: str, output_type: str='smiles',
-        top_frequent_bits: int=1, output_drawing: bool=False,
-        outdir_pth: Optional[str]=None, out_prefix: Optional[str]=None, num_workers: int=1
+        self,
+        dataset_pth: str,
+        output_type: str = 'smiles',
+        top_frequent_bits: int = 1,
+        output_drawing: bool = False,
+        outdir_pth: Optional[str] = None,
+        out_prefix: Optional[str] = None,
+        num_workers: int = 1
     ) -> None:
         # sanity check output_type
         try:
@@ -247,9 +282,10 @@ class ConceptFromFingerprint():
         packer = Packer()
         out_f = open(
             os.path.join(
-                outdir_pth,
-                f"{f'{out_prefix}_' if out_prefix else ''}cfFP-top.msgpack"),
-        'wb')
+                outdir_pth, f"{f'{out_prefix}_' if out_prefix else ''}cfFP-top.msgpack"
+            ),
+            'wb'
+        )
 
         with open(dataset_pth, 'rb') as h:
             unpacker = Unpacker(h, raw=False)
@@ -259,21 +295,28 @@ class ConceptFromFingerprint():
                 pbar = tqdm(total=len(fs), desc="Processing per feature...")
 
                 with ProcessPoolExecutor(
-                    max_workers=num_workers,
-                    initializer=init_fpgen,
-                    initargs=(
-                        self.fptype, self.fpsize, self.radius, self.minpath, self.maxpath,
-                        self.countSimulation, self.includeChirality
+                    max_workers = num_workers,
+                    initializer = init_fpgen,
+                    initargs = (
+                        self.fptype,
+                        self.fpsize,
+                        self.radius,
+                        self.minpath,
+                        self.maxpath,
+                        self.countSimulation,
+                        self.includeChirality
                     )
                 ) as exec:
                     p_wb = partial(
                         wrap_batch,
-                        fptype=self.fptype, ignoreAtoms=[],
-                        top_frequent_bits=top_frequent_bits,
-                        output_type=output_type, output_drawing=output_drawing
+                        fptype = self.fptype,
+                        ignoreAtoms = [],
+                        top_frequent_bits = top_frequent_bits,
+                        output_type = output_type,
+                        output_drawing = output_drawing
                     )
                     futures = [exec.submit(
-                        p_wb, f=f, smiles=obj[f]["smiles"], fromAtoms=obj[f]["atom_idx"]
+                        p_wb, f = f, smiles = obj[f]["smiles"], fromAtoms = obj[f]["atom_idx"]
                     ) for f in fs]
                     
                     for future in as_completed(futures):
@@ -292,17 +335,14 @@ class UnionFind():
 
     def find(self, mol_i: int) -> int:
         root = self.parent[mol_i]
-
         if self.parent[root] != root:
             self.parent[mol_i] = self.find(root)
             return self.parent[mol_i]
-        
         return root
 
     def union(self, mol_i: int, mol_j: int):
         root_i = self.find(mol_i)
         root_j = self.find(mol_j)
-        
         if root_i != root_j:
             if self.rank[root_i] < self.rank[root_j]:
                 self.parent[root_i] = root_j
@@ -323,8 +363,9 @@ class UnionFind():
 class ConceptFromFingerprintBatchAnalysis():
     def __init__(
         self,
-        out_cff_top_batch_pth: Union[str, Path], out_prefix: Optional[str]=None,
-        outdir_pth: Optional[Union[str, Path]]=None
+        out_cff_top_batch_pth: Union[str, Path],
+        out_prefix: Optional[str] = None,
+        outdir_pth: Optional[Union[str, Path]] = None
     ):
         self.cff_tb = out_cff_top_batch_pth
         
@@ -397,10 +438,15 @@ class ConceptFromFingerprintBatchAnalysis():
 
 # .msgpack
 def prep_data(
-    dataset_pth: str, outfile_pth: str, n_feats: int, excl_nta: bool=False,
-    random_weight: Optional[float]=None, unsele_feats: Optional[set[int]]=None,
-    unsele_smiles: Optional[set[str]]=None, max_sample: Optional[int]=None,
-    max_patience: Optional[int]=3
+    dataset_pth: str,
+    outfile_pth: str,
+    n_feats: int,
+    excl_nta: bool = False,
+    random_weight: Optional[float] = None,
+    unsele_feats: Optional[set[int]] = None,
+    unsele_smiles: Optional[set[str]] = None,
+    max_sample: Optional[int] = None,
+    max_patience: Optional[int] = 3
 ) -> None:
     # sanity check
     if random_weight:
@@ -464,8 +510,10 @@ def prep_data(
                 else:
                     curr_patience = 0
 
-                print(f"Saved features at chunk {c}: {curr_n_unsele - init_n_unsele}; "
-                      f"Patience: {curr_patience}")
+                print(
+                    f"Saved features at chunk {c}: {curr_n_unsele - init_n_unsele}; "
+                    f"Patience: {curr_patience}"
+                )
                 last_n_unsele = curr_n_unsele
 
     with open(outfile_pth, "wb") as out_fn:

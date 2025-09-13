@@ -1,7 +1,10 @@
 import argparse
-
 from pathlib import Path
-from .concept_fp import ConceptFromFingerprintBatchAnalysis
+from rdkit import RDLogger
+
+from .concept_fp_utils import ConceptFromFingerprintBatchAnalysis
+
+RDLogger.DisableLog('rdApp.*')
 
 def main():
     parser = argparse.ArgumentParser(
@@ -24,12 +27,9 @@ def main():
 
     # init
     cffba = ConceptFromFingerprintBatchAnalysis(
-        out_cff_top_batch_pth=out_cff_top_batch_pth,
-        out_prefix=args.out_prefix,
-        outdir_pth=wd,
+        out_cff_top_batch_pth, args.out_prefix, wd
     )
-    
-    cffba.analyze(threshold=args.threshold)
+    cffba.analyze(args.threshold)
 
 
 if __name__ == '__main__':

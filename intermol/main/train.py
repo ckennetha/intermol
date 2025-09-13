@@ -14,9 +14,7 @@ from .config import *
 def main():
     ptl.seed_everything(SEED)
 
-    output_dir = (
-        f"results_layer{BASE_HOOK_POS}_exp{EXP_F}_k{K}_{SEED}"
-    )
+    output_dir = (f"results_layer{BASE_HOOK_POS}_exp{EXP_F}_k{K}_{SEED}")
     if not os.path.exists(f'../{output_dir}'):
         os.mkdir(f'../{output_dir}')
 
@@ -71,7 +69,6 @@ def main():
         trainer.fit(model, data, ckpt_path=WEIGHTS_PATH)
     else:
         trainer.fit(model, data)
-
     #trainer.test(model, data)
 
     try:

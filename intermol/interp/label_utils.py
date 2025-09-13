@@ -1,5 +1,4 @@
 import re
-
 from rdkit import Chem
 from typing import Optional
 
@@ -10,7 +9,6 @@ _RX_BRANCH = re.compile(r'(\%[0-9]{2}|[0-9])')
 _RX_RING = re.compile(r'[\(\)]')
 _RX_NONATOM = re.compile(r'(\(|\)|\.|\%[0-9]{2}|[0-9])')
 _RX_NONATOM_NOR = re.compile(r'(\)|\.|\%[0-9]{2}|[0-9])')
-
 
 # get atom-to-token index mapping
 def map_atom_token_idx(
@@ -91,7 +89,7 @@ def list_rings(
 
 # check branch formed by matching atoms
 def check_branch(
-    mol: Chem.Mol, obj: str="molecule", match_atom_idx: Optional[list]=None
+    mol: Chem.Mol, obj: str = "molecule", match_atom_idx: Optional[list] = None
 ) -> bool:
     if obj == "molecule":
         atoms = [mol.GetAtomWithIdx(mai) for mai in match_atom_idx]

@@ -11,6 +11,7 @@ This code is adapted from:
 import math
 import torch
 import torch.nn as nn
+
 from torch.nn import functional as F
 from typing import Optional
 
@@ -19,9 +20,9 @@ class SparseAutoencoder(nn.Module):
         self,
         exp_f: int,
         k: int,
-        base_dim: int=768,
-        batch_size: int=128,
-        dead_steps_thresh: int=5000
+        base_dim: int = 768,
+        batch_size: int = 128,
+        dead_steps_thresh: int = 5000
     ):
         super().__init__()
 
@@ -49,7 +50,7 @@ class SparseAutoencoder(nn.Module):
         return result
 
     def LN(
-        self, x: torch.Tensor, eps: float=1e-5
+        self, x: torch.Tensor, eps: float = 1e-5
     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor]:
         mu = x.mean(dim=-1, keepdim=True)
         x = x - mu
@@ -118,7 +119,9 @@ class SparseAutoencoder(nn.Module):
         return acts, mu, std
 
     @torch.no_grad()
-    def decode(self, acts: torch.Tensor, mu: torch.Tensor, std: torch.Tensor) -> torch.Tensor:
+    def decode(self,
+        acts: torch.Tensor, mu: torch.Tensor, std: torch.Tensor
+    ) -> torch.Tensor:
         latents = self.topK_activation(acts, self.k)
 
         recons = latents @ self.w_dec + self.b_pre
@@ -133,7 +136,7 @@ class SparseAutoencoder(nn.Module):
 
 
 def loss_fn(
-    x: torch.Tensor, recons: torch.Tensor, auxk: Optional[torch.Tensor]=None
+    x: torch.Tensor, recons: torch.Tensor, auxk: Optional[torch.Tensor] = None
 ) -> tuple[torch.Tensor, torch.Tensor]:
     mse_scale = 1
     auxk_coeff = 1.0 / 32.0

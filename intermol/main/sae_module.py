@@ -18,21 +18,17 @@ class SAEModule(ptl.LightningModule):
         base_hook_pos: int,
         lr: float,
         wd: float,
-        base: str='ibm/MoLFormer-XL-both-10pct',
-        base_dim: int=768,
-        batch_size: int=128,
-        dead_steps_thresh: int=5000
+        base: str = 'ibm/MoLFormer-XL-both-10pct',
+        base_dim: int = 768,
+        batch_size: int = 128,
+        dead_steps_thresh: int = 5000
     ):
         super().__init__()
         self.save_hyperparameters()
         
         self.tokenizer, self.base = load_hf_model(base)
         self.sae = SparseAutoencoder(
-            exp_f=exp_f,
-            k=k,
-            batch_size=batch_size,
-            base_dim=base_dim,
-            dead_steps_thresh=dead_steps_thresh
+            exp_f, k, batch_size, base_dim, dead_steps_thresh
         )
 
         self.lr = lr
@@ -68,7 +64,7 @@ class SAEModule(ptl.LightningModule):
                 'train_mse_loss': mse_loss,
                 'train_aux_k_loss': aux_k_loss,
                 'num_dead_neurons': num_dead
-                },
+            },
             on_step=True,
             on_epoch=True,
             logger=True,
@@ -111,7 +107,7 @@ class SAEModule(ptl.LightningModule):
             {
                 'val_mse_loss': avg_mse_loss,
                 'val_diff_ce': avg_diff_ce,
-                },
+            },
             on_epoch=True,
             prog_bar=True,
             logger=True
@@ -123,7 +119,7 @@ class SAEModule(ptl.LightningModule):
     def configure_optimizers(self):
         return torch.optim.AdamW(
             self.parameters(), lr=self.lr, weight_decay=self.wd,
-            )
+        )
     
     def on_after_backward(self):
         self.sae.norm_weights()
