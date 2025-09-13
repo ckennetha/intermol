@@ -20,10 +20,10 @@ from .label_utils import (
 def describe(
     dataset_pth: str,
     acts_h5_pth: str,
-    output_fp_dataset: bool=False,
-    threshold: Optional[float]=0.0,
-    out_prefix: Optional[str]=None,
-    outdir_pth: Optional[str]=None,
+    output_fp_dataset: bool = False,
+    threshold: Optional[float] = 0.0,
+    out_prefix: Optional[str] = None,
+    outdir_pth: Optional[str] = None,
 ) -> None:
     # validate outdir_pth
     if outdir_pth:
@@ -47,7 +47,8 @@ def describe(
                                 f"the precomputed activations ({acts_f.attrs['num_samples']}).")
         
         chunks = sorted(
-            [c_name for c_name in acts_f.keys()], key=lambda gn: int(re.search(r'\d+', gn).group())
+            [c_name for c_name in acts_f.keys()],
+            key=lambda gn: int(re.search(r'\d+', gn).group())
         )
         n_chunks = acts_f.attrs["num_chunks"]
         n_features = acts_f.attrs["num_features"]
@@ -163,9 +164,12 @@ def describe(
 
             counts[f][meta] = dict(counts[f][meta])
 
-    with open(os.path.join(
-        outdir_pth, f"{out_prefix + '_' if out_prefix else ''}{'thr' + str(threshold) + '_' if threshold > 0.0 else ''}stats.json"
-    ), "w") as h:
+    with open(
+        os.path.join(
+            outdir_pth,
+            f"{out_prefix + '_' if out_prefix else ''}{'thr' + str(threshold) + '_' if threshold > 0.0 else ''}stats.json"
+        ), "w"
+    ) as h:
         json.dump(counts, h)
 
 
@@ -178,7 +182,6 @@ def main():
             for ConceptFromFingerprint will also be generated.
         '''
     )
-    
     parser.add_argument('--dataset', type=str, required=True, help='Path to Smiles dataset. Supported ext.: .txt.')
     parser.add_argument('--activations', type=str, required=True, help='Path to precomputed dataset activations. '
                         'Supported ext.: .h5.')
@@ -190,9 +193,14 @@ def main():
 
     args = parser.parse_args()
 
+
     describe(
-        dataset_pth=args.dataset, acts_h5_pth=args.activations, output_fp_dataset=args.output_fp_dataset,
-        threshold=args.act_thresh, out_prefix=args.out_prefix, outdir_pth=args.outdir
+        args.dataset,
+        args.activations,
+        args.output_fp_dataset,
+        args.act_thresh,
+        args.out_prefix,
+        args.outdir
     )
 
 

@@ -15,7 +15,7 @@ from transformers import AutoModelForMaskedLM, AutoTokenizer
 # load model
 @torch.no_grad()
 def load_model(
-    model: torch.nn.Module, ckpt_pth: str, mode: str='eval'
+    model: torch.nn.Module, ckpt_pth: str, mode: str = 'eval'
 ) -> torch.nn.Module:
     weights = torch.load(ckpt_pth, map_location='cpu', weights_only=True)
     if not isinstance(weights, OrderedDict):
@@ -43,9 +43,7 @@ def load_model(
         )
 
 # load Hugging Face model
-def load_hf_model(
-    base_pth: str, tokenizer_only: bool=False
-) -> tuple: 
+def load_hf_model(base_pth: str, tokenizer_only: bool = False) -> tuple: 
     tokenizer = AutoTokenizer.from_pretrained(
         base_pth, trust_remote_code=True
     )
@@ -54,7 +52,7 @@ def load_hf_model(
     
     model = AutoModelForMaskedLM.from_pretrained(
         base_pth, deterministic_eval=True, trust_remote_code=True
-        )
+    )
     for param in model.parameters():
         param.requires_grad = False
 
@@ -62,9 +60,7 @@ def load_hf_model(
 
 # cross entropy difference
 def diff_cross_entropy(
-    ori_logits: torch.Tensor,
-    recons_logits: torch.Tensor,
-    tokens: torch.Tensor
+    ori_logits: torch.Tensor, recons_logits: torch.Tensor, tokens: torch.Tensor
 ) -> float:
     ori_logits = ori_logits.view(-1, ori_logits.shape[-1])
     recons_logits = recons_logits.view(-1, ori_logits.shape[-1])
@@ -76,7 +72,7 @@ def diff_cross_entropy(
 
 # train-val-test split
 def train_val_test_split(
-    df: pl.DataFrame, train_size: float=0.80, seed: int=None
+    df: pl.DataFrame, train_size: float = 0.80, seed: int = None
 ) -> tuple[pl.Series, pl.Series, pl.Series]:
     if seed:
         rng = np.random.default_rng(seed)
@@ -102,5 +98,4 @@ def train_val_test_split(
             )
         )
     val_set, test_set = val_test_set.filter(is_val), val_test_set.filter(~is_val)
-
     return train_set, val_set, test_set

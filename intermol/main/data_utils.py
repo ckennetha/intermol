@@ -1,16 +1,12 @@
 import multiprocessing as mp
 import polars as pl
 import pytorch_lightning as ptl
-
 from torch.utils.data import Dataset, DataLoader
+
 from .utils import train_val_test_split
 
 class MolDataset(Dataset):
-    def __init__(
-        self,
-        data: pl.DataFrame,
-        col_sele: str
-    ):
+    def __init__(self, data: pl.DataFrame, col_sele: str):
         super().__init__()
         self.data = data
         self.col_sele = col_sele
@@ -20,7 +16,6 @@ class MolDataset(Dataset):
     
     def __getitem__(self, idx):
         row = self.data.row(idx, named=True)
-
         return {
             'smi': row[self.col_sele],
             'id': row['id']
@@ -32,9 +27,9 @@ class MolDataModule(ptl.LightningDataModule):
         data_pth: str,
         col_sele: str,
         batch_size: int,
-        train_size: float=0.8,
-        num_workers: int=mp.cpu_count() - 1,
-        seed: int=None
+        train_size: float = 0.8,
+        num_workers: int = mp.cpu_count() - 1,
+        seed: int = None
     ):
         super().__init__()
         self.data_pth = data_pth
@@ -44,7 +39,7 @@ class MolDataModule(ptl.LightningDataModule):
         self.num_workers = num_workers
         self.seed = seed
 
-    def setup(self, stage=None):
+    def setup(self, stage = None):
         df = pl.read_parquet(self.data_pth)
         self.train_df, self.val_df, self.test_df = train_val_test_split(df, self.train_size)
 
