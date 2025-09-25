@@ -5,22 +5,15 @@ import json
 import numpy as np
 
 from collections import Counter
-from msgpack import Packer
 from tqdm import tqdm
 from typing import Optional
 
 from ..main.utils import load_hf_model
-from .label_utils import (
-    _RX_BOND,
-    _RX_BRANCH,
-    _RX_RING,
-    map_atom_token_idx
-)
+from .label_utils import _RX_BOND, _RX_BRANCH, _RX_RING
 
 def describe(
     dataset_pth: str,
     acts_h5_pth: str,
-    output_fp_dataset: bool = False,
     threshold: Optional[float] = 0.0,
     out_prefix: Optional[str] = None,
     outdir_pth: Optional[str] = None,
@@ -59,13 +52,6 @@ def describe(
             "tokenType": Counter(), #Atom, Bond, Branches, Rings, or Disconnections
             "activatingToken": Counter(), #Tokens
         } for f in list(range(n_features))}
-        
-        if output_fp_dataset:
-            packer = Packer()
-            out_fp = open(
-                os.path.join(outdir_pth, f"{out_prefix + '_' if out_prefix else ''}{'thr' + str(threshold) + '_' if threshold > 0.0 else ''}fp_dataset.msgpack"),
-                "wb"
-            )
 
         # tokenizer
         tokenizer = load_hf_model("ibm-research/MoLFormer-XL-both-10pct", tokenizer_only=True)
@@ -78,9 +64,6 @@ def describe(
             indptr = g['indptr'][:]
             indices = g['indices'][:]
             data = g['data'][:]
-
-            if output_fp_dataset:
-                fps = {}
 
             curr_indptr = 0
             curr_data = 0
@@ -110,11 +93,6 @@ def describe(
                     mol_indptr[0] = 0
                     np.cumsum(mol_counts, out=mol_indptr[1:])
 
-                if output_fp_dataset:
-                    mapper = map_atom_token_idx(tokens)
-                    inv_mapper = {tok_idx: at_idx for at_idx, tok_idx in mapper.items()}
-                    atom_idxs = []
-
                 nz_feats = np.where(np.diff(mol_indptr) > 0)[0]
                 for nzf in nz_feats:
                     f = str(nzf)
@@ -125,24 +103,11 @@ def describe(
                     for tok_idx in nz_indices:
                         counts[f]["activatingToken"][tokens[tok_idx]] += 1
 
-                    if output_fp_dataset:
-                        atom_idx = [inv_mapper[tok_idx] for tok_idx in nz_indices if tok_idx in inv_mapper]
-                        atom_idxs.append(atom_idx)
-
-                if output_fp_dataset and atom_idxs:
-                    fps[smi] = {"features": nz_feats.tolist(), "atom_idxs": atom_idxs}
-
                 curr_indptr = end_indptr
                 curr_data = end_data
                 curr_smi += 1
 
-            if output_fp_dataset:
-                out_fp.write(packer.pack(fps))
-
             pbar.update()
-    
-    if output_fp_dataset:
-        out_fp.close()
 
     # counts to dict
     for f in tqdm(counts, desc="Generating feature statistics..."):
@@ -176,17 +141,13 @@ def describe(
 def main():
     parser = argparse.ArgumentParser(
         description='''
-            Generate a description and statistics on activation patterns across given samples and their
-            procomputed activations in JSON format. The output includes tokenType, activatingToken, patternActivation,
-            and activatingMolecule. Additionally, if `output_fp_dataset` is set, a dataset
-            for ConceptFromFingerprint will also be generated.
+            Generate a description and statistics on activation patterns across given samples and their procomputed
+            activations in JSON format. The output includes tokenType, activatingToken, and activatingMolecule.
         '''
     )
     parser.add_argument('--dataset', type=str, required=True, help='Path to Smiles dataset. Supported ext.: .txt.')
     parser.add_argument('--activations', type=str, required=True, help='Path to precomputed dataset activations. '
                         'Supported ext.: .h5.')
-    parser.add_argument('--output_fp_dataset', action='store_true', help='If set, also process data to generate a '
-                        'dataset for ConceptFromFingerprint. Default: False.')
     parser.add_argument('--act_thresh', type=float, default=0.0, help='Minimum activation of selected tokens. Default: 0.0.')
     parser.add_argument('--out_prefix', type=str, default=None, help='Output file prefix. Default: None.')
     parser.add_argument('--outdir', type=str, help='Output directory. Default: current directory.')
@@ -197,7 +158,6 @@ def main():
     describe(
         args.dataset,
         args.activations,
-        args.output_fp_dataset,
         args.act_thresh,
         args.out_prefix,
         args.outdir
