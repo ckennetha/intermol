@@ -44,17 +44,16 @@ class ConceptEvaluator:
         self.acts_h5_pth = acts_h5_pth
         self.batch_size = batch_size # batch size for accessing np.memmap
 
-    def _init_confusion_matrix(self, shape: tuple[int, int, int]) -> np.memmap:
+    def _init_confusion_matrix(self, shape: tuple[int, int, int]) -> None:
         with tempfile.NamedTemporaryFile(delete=False) as ntf:
             self.tmp_name = ntf.name
-            tmp_cm = np.memmap(
+            self.cm = np.memmap(
                 self.tmp_name, mode='w+', shape=shape, dtype=np.uint64
             )
-        return tmp_cm
 
-    def _cleanup_confusion_matrix(self, tmp_cm: np.memmap) -> None:
-        tmp_cm._mmap.close()
-        del tmp_cm
+    def _cleanup_confusion_matrix(self) -> None:
+        self.cm._mmap.close()
+        del self.cm
         os.unlink(self.tmp_name)
 
     def eval(
@@ -92,7 +91,7 @@ class ConceptEvaluator:
                     for v_i, v in enumerate(v_fpc):
                         p_fpc[v_i, :len(v)] = v
 
-                cm = self._init_confusion_matrix(shape)
+                self._init_confusion_matrix(shape)
 
                 # eval
                 curr_smi = 0
@@ -158,7 +157,7 @@ class ConceptEvaluator:
                                 label[rows, cols] = 1
 
                                 update_confusion_matrix(
-                                    cm,
+                                    self.cm,
                                     mol_indptr, mol_indices, mol_data,
                                     nt, n_features, thresholds,
                                     cs_sele, fs_sele, label,
@@ -172,7 +171,7 @@ class ConceptEvaluator:
 
                             if use_fpc and (fs_no_sele is not None):
                                 update_no_confusion_matrix(
-                                    cm,
+                                    self.cm,
                                     mol_indptr, mol_data,
                                     nt, n_features, thresholds,
                                     cs_no_sele, fs_no_sele, p_no_sele
@@ -184,7 +183,7 @@ class ConceptEvaluator:
 
                             pbar.update()
                             # update confusion matrix
-                            cm.flush()
+                            self.cm.flush()
 
                         # early stop
                         if pbar.n == pbar.total:
@@ -196,14 +195,14 @@ class ConceptEvaluator:
                 cs_no_sele, fs_no_sele, p_no_sele
             )
 
-            nr = cm.shape[0]
+            nr = self.cm.shape[0]
             nb = math.ceil(nr / self.batch_size)
             outs = []
             for b_i in tqdm(range(nb), leave=False):
                 sb = b_i * self.batch_size
                 eb = min(sb + self.batch_size, nr)
 
-                cm_b = cm[sb:eb]
+                cm_b = self.cm[sb:eb]
                 rgs = (sb, eb)
                 outs.extend(
                     score_concepts(
@@ -212,7 +211,7 @@ class ConceptEvaluator:
                     )
                 )
         finally:
-            self._cleanup_confusion_matrix(cm)
+            self._cleanup_confusion_matrix()
 
         return outs
 
@@ -253,7 +252,7 @@ class ConceptEvaluator:
                     for v_i, v in enumerate(v_fpc):
                         p_fpc[v_i, :len(v)] = v
 
-                cm = self._init_confusion_matrix(shape)
+                self._init_confusion_matrix(shape)
                 tp_substruct = np.zeros((nr, n_thresholds), dtype=np.uint64)
 
                 # init total substructure counter
@@ -350,7 +349,7 @@ class ConceptEvaluator:
                                 label_sub_sum = np.sum(label_sub, axis=0)
 
                                 update_confusion_matrix_substructure(
-                                    cm, tp_substruct,
+                                    self.cm, tp_substruct,
                                     mol_indptr, mol_indices, mol_data,
                                     map_sub_indices=ls_sub_indices,
                                     map_sub_indptr=ls_sub_indptr,
@@ -368,7 +367,7 @@ class ConceptEvaluator:
 
                             if use_fpc and (fs_no_sele is not None):
                                 update_no_confusion_matrix(
-                                    cm,
+                                    self.cm,
                                     mol_indptr, mol_data,
                                     nt, n_features, thresholds,
                                     cs_no_sele, fs_no_sele, p_no_sele
@@ -379,7 +378,7 @@ class ConceptEvaluator:
                             curr_smi += 1
 
                             pbar.update()
-                            cm.flush()
+                            self.cm.flush()
 
                         # early stop
                         if pbar.n == pbar.total:
@@ -391,14 +390,14 @@ class ConceptEvaluator:
                 cs_no_sele, fs_no_sele, p_no_sele
             )
 
-            nr = cm.shape[0]
+            nr = self.cm.shape[0]
             nb = math.ceil(nr / self.batch_size)
             outs = []
             for b_i in tqdm(range(nb), leave=False):
                 sb = b_i * self.batch_size
                 eb = min(sb + self.batch_size, nr)
 
-                cm_b = cm[sb:eb]
+                cm_b = self.cm[sb:eb]
                 rgs = (sb, eb)
                 outs.extend(
                     score_concepts(
@@ -408,11 +407,11 @@ class ConceptEvaluator:
                     )
                 )
         finally:
-            self._cleanup_confusion_matrix(cm)
+            self._cleanup_confusion_matrix()
 
         return outs
 
-def smd(
+def calculate_smd(
     acts_h5_pth: str,
     samples: dict[int, dict[int, list[int]]],
     n_concepts: int,
@@ -505,6 +504,27 @@ def smd(
                     curr_smi += 1
                     pbar.update()
 
+    neg_mean = neg_arr / ctr[:, [0]]
+    pos_mean = pos_arr / ctr[:, [1]]
+
+    neg_var = (neg_sq_arr / ctr[:, [0]]) - neg_mean ** 2
+    pos_var = (pos_sq_arr / ctr[:, [1]]) - pos_mean ** 2
+    std = np.sqrt((pos_var + neg_var) / 2)
+
+    smd = (pos_mean - neg_mean) / (std + eps)
+    cs_sz, fs_sz = smd.shape
+    outs = []
+    for c_i in range(cs_sz):
+        smd_c = smd[c_i, :].tolist()
+        for f in range(fs_sz):
+            outs.append(
+                SMDOutput(
+                    conceptIdx=c_i,
+                    featureIdx=f,
+                    smd=smd_c[f]
+                )
+            )
+    return outs
 
 
 # helpers

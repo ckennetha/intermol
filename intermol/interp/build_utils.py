@@ -80,7 +80,7 @@ def build_eval_data(
     desc_colnm: str,
     concept_colnm: str,
     prefilter_smarts: bool = True,
-    use_smiles_indices: bool = False,
+    use_smiles_indices: bool = True,
     batch_size: int = 8192,
     n_threads: int = 1
 ) -> None:
@@ -110,9 +110,11 @@ def build_eval_data(
         flat_labels = []
         for smi, label in labels.items():
             smi_str = smi if use_smiles_indices else smiles_map[smi]
-            for desc, tk_idxs in label.items():
+            for concept, tk_idxs in label.items():
                 flat_labels.append({
-                    "smiles": smi_str, "desc": desc, "token_idxs": tk_idxs
+                    "smiles": smi_str,
+                    "concept": concept,
+                    "token_idxs": tk_idxs
                 })
 
         outs.append(pl.DataFrame(flat_labels))

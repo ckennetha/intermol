@@ -102,7 +102,6 @@ class BatchLabelFromSmarts():
         self, smiles: str, descs: list[str | int]
     ) -> dict[str, list[list[int]]]:
         mol = Chem.MolFromSmiles(smiles)
-        n_atoms = mol.GetNumAtoms()
         tokens = _RX_TOKEN.findall(smiles)
         at_idx_to_tk_idx_map = map_atom_idx_to_token_idx(tokens)
 
