@@ -21,6 +21,10 @@ requires-python = ">=3.9"
 [project.urls]
 Repository = "https://github.com/ckennetha/intermol"
 
+[project.scripts]
+run-eval-concepts = "scripts.run_eval_concepts:main"
+run-precomp-acts = "scripts.run_precomp_acts:main"
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
@@ -33,4 +37,4 @@ target-version = "py39"
 select = ["E", "F", "W"]
 
 [tool.hatch.build.targets.wheel]
-packages = ["intermol"]
+packages = ["intermol", "scripts"]

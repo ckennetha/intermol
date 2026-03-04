@@ -105,7 +105,8 @@ def precomp_acts(
     "--chunk-size", type=int, default=8192, help="Number of samples per chunk"
 )
 @click.option(
-    "--outdir-pth", type=click.Path(), default='.', help='Output directory'
+    "--outdir-pth", type=click.Path(file_okay=False), default='.',
+    help='Output directory'
 )
 @click.option(
     "--out-prefix", type=str, default=None, help='Output file prefix'
