@@ -15,17 +15,17 @@ class SAEInferenceModule():
     ):
         # device
         if device_name == "auto":
-            device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+            self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         else:
-            device = torch.device(device_name)
+            self.device = torch.device(device_name)
 
         # models
         self.tokenizer, self.base_model = load_model_from_HF(model_name)
-        self.base_model.to(device)
+        self.base_model.to(self.device)
 
         self.sae = SparseAutoencoder(hidden_dim, k)
         self.sae = load_model_from_file(self.sae, sae_pth)
-        self.sae.to(device)
+        self.sae.to(self.device)
 
         self.layer_idx = layer_idx
 
