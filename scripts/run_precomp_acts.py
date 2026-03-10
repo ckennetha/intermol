@@ -3,6 +3,7 @@ import click
 import h5py
 import numpy as np
 
+from datetime import datetime
 from pathlib import Path
 from tqdm import tqdm
 from scipy.sparse import csc_matrix
@@ -22,7 +23,9 @@ def precomp_acts(
     n_features = sae_module.sae.hidden_dim
     n_chunks = math.ceil(n_samples / chunk_size)
 
-    h5f_pth = outdir_pth / f'{out_prefix + "_" if out_prefix else ""}acts.h5'
+    if out_prefix is None:
+        out_prefix = datetime.now().strftime("%Y%m%d%H%M")
+    h5f_pth = outdir_pth / f'{out_prefix}_acts.h5'
     with h5py.File(h5f_pth, 'w') as h5f:
         # attrs
         h5f.attrs['num_chunks'] = n_chunks
@@ -109,7 +112,8 @@ def precomp_acts(
     help='Output directory'
 )
 @click.option(
-    "--out-prefix", type=str, default=None, help='Output file prefix'
+    "--out-prefix", type=str, default=None,
+    help='Output file prefix. Defaults to current timestamp (e.g. 202503101430).'
 )
 @click.option(
     "--device", type=click.Choice(['auto', 'cpu', 'cuda']), default='auto',
