@@ -130,7 +130,7 @@ class SparseAutoencoder(nn.Module):
         recons = latents @ self.w_dec + self.b_pre
         recons = recons * std + mu
         return recons
-    
+
     @torch.no_grad()
     def encode_latents(self, x: torch.Tensor) -> torch.Tensor:
         acts, _, _ = self.encode(x)

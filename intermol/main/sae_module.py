@@ -26,7 +26,7 @@ class SAEModule(ptl.LightningModule):
         self.save_hyperparameters()
 
         # load models
-        self.tokenizer, self.model_base = load_model_from_HF(model_name)
+        self.tokenizer, self.base_model = load_model_from_HF(model_name)
         self.sae = SparseAutoencoder(
             hidden_dim, k,
             model_dim,
@@ -93,7 +93,7 @@ class SAEModule(ptl.LightningModule):
             mse_loss, _ = loss_fn(acts, recons, None)
             mse_losses[i] = mse_loss
 
-            recons_logits = self._modify_base_acts(mol_enc, recons, self.model_hook_pos)
+            recons_logits = self._base_modify(mol_enc, recons, self.model_hook_pos)
             diff_ce = delta_ce(ori_logits, recons_logits, tokens)
             diff_ces[i] = diff_ce
 
@@ -133,7 +133,7 @@ class SAEModule(ptl.LightningModule):
 
     @torch.no_grad()
     def _base_encode(self, enc, layer_idx: int):
-        outs = self.model_base(**enc, output_hidden_states=True)
+        outs = self.base_model(**enc, output_hidden_states=True)
         acts = outs.hidden_states[layer_idx]
         return enc['input_ids'], outs.logits, acts
 
@@ -142,10 +142,12 @@ class SAEModule(ptl.LightningModule):
         def hook_fn(module, input, output):
             return acts
 
-        p_acts = self.model_base.molformer.encoder.layer[layer_idx - 1].output
-        hook = p_acts.register_forward_hook(hook_fn)
+        target_layer = (
+            self.base_model.molformer.encoder.layer[self.layer_idx - 1].output
+        )
+        hook = target_layer.register_forward_hook(hook_fn)
 
-        outs = self.model_base(**enc)
+        outs = self.base_model(**enc)
         hook.remove()
 
         return outs.logits
