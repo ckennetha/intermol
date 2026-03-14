@@ -269,22 +269,33 @@ def get_positional_latents(
                         corr = fast_spearmanr(r_pos, nz_data)
 
                         outres[f]['len'].append(n_nz_indices)
-                        outres[f]['sample_idx'].append(curr_smi)
                         outres[f]['coef'].append(corr)
 
                     pbar.update()
 
-                curr_indptr = e_indptr
-                curr_indices = e_indices
-                curr_smi += 1
+                    curr_indptr = e_indptr
+                    curr_indices = e_indices
+                    curr_smi += 1
 
     corr_stats = []
     for f, out in tqdm(outres.items(), desc="Computing correlation coefficient..."):
         clip_corr = np.clip(out['coef'], -0.99999, 0.99999)
-        corr_mean = np.tanh(np.arctanh(clip_corr).mean()).item()
-
         n_samples = len(out['len'])
         eval_tk_len = np.array(out['len'])
+
+        if n_samples == 0 or eval_tk_len.sum() == 0:
+            corr_stats.append({
+                "feature": f,
+                "n": 0,
+                "length_Min": None,
+                "length_Median": None,
+                "length_Max": None,
+                "length_Mean": None,
+                "corr_Mean": None
+            })
+            continue
+
+        corr_mean = np.tanh(np.arctanh(clip_corr).mean()).item()
         corr_stats.append({
             "feature": f,
             "n": n_samples,
