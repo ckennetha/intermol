@@ -296,14 +296,19 @@ class SmilesEditor:
 
     @staticmethod
     def generate_noncanon(smi: str, n: int = 5, reps: int = 10) -> list[str]:
-        if reps > n:
-            raise ValueError(f"`reps` must be `n`, fot n={n} and reps={reps}.")
+        if reps < n:
+            raise ValueError(
+                "`reps` must be larger than `n`, ",
+                f"got n={n} and reps={reps}."
+            )
 
         mol = Chem.MolFromSmiles(smi)
         c_smi = Chem.MolToSmiles(mol, canonical=True)
-        unc_smi = set(
-            Chem.MolToSmiles(mol, doRandom=True, canonical=False)
-            for _ in range(reps)
-        )
-        nc_smiles = [nc_smi for nc_smi in unc_smi if nc_smi != c_smi]
-        return nc_smiles
+        nc_smiles = set()
+        for _ in range(reps):
+            nc_smi = Chem.MolToSmiles(mol, doRandom=True, canonical=False)
+            if nc_smi != c_smi and nc_smi not in nc_smiles:
+                nc_smiles.add(nc_smi)
+                if len(nc_smiles) == n:
+                    break
+        return list(nc_smiles)
