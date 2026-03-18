@@ -83,13 +83,13 @@ def build_config(config, **cli_kwargs) -> Config:
 )
 
 # cfg: SAE
-@click.option("--layer", type=int, default=None, help="Layer of the base model")
+@click.option("--layer", type=int, required=True, help="Layer of the base model")
 @click.option(
-    "--hidden-dim", type=int, default=None,
+    "--hidden-dim", type=int, required=True,
     help="Latent dimension of the SAE"
 )
 @click.option(
-    "--k", type=int, default=None,
+    "--k", type=int, required=True,
     help="Number of top-k latents used in the SAE"
 )
 @click.option(

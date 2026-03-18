@@ -128,7 +128,7 @@ def prep_fpc(
 # paths
 @click.option(
     "--data-pth", required=True, type=click.Path(exists=True),
-    help="Path to input parquet data."
+    help="Path to input .parquet file."
 )
 @click.option(
     "--acts-h5-pth", required=True, type=click.Path(exists=True),
@@ -148,7 +148,7 @@ def prep_fpc(
 @click.option(
     "--fpc-pth", required=False, type=click.Path(exists=True), default=None,
     help="Path to 'calculate_smd' or prefiltering output (optional). " \
-    "If not provided, concepts will be evaluated across all latents in the SAE."
+    "If not provided, concepts will be evaluated across all SAE latents."
 )
 
 # column names
@@ -174,8 +174,8 @@ def prep_fpc(
 
 # eval options
 @click.option(
-    "--thresholds", multiple=True, default=(0.0,), type=float,
-    help="Thresholds for evaluation (pass multiple)."
+    "--thresholds", nargs=-1, type=float,
+    help="Thresholds for evaluation (pass multiple). Default: 0."
 )
 @click.option(
     "--use-pooling", is_flag=True, default=False,
@@ -187,16 +187,16 @@ def prep_fpc(
 )
 @click.option(
     "--batch-size", default=65536, type=int,
-    help="Batch size for data packing and evaluation."
+    help="Batch size for data packing and evaluation. Default: 65536."
 )
 
 # fpc options (if provided)
 @click.option(
     "--score-threshold", default=0.0, type=float,
-    help="Minimum SMD score threshold for fpc."
+    help="Minimum SMD score threshold for fpc. Default: 0."
 )
 @click.option(
-    "--k", default=64, type=int, help="Top-k features per concept."
+    "--k", default=64, type=int, help="Top-k features per concept. Default: 64."
 )
 
 # sampling options
@@ -205,9 +205,11 @@ def prep_fpc(
 )
 @click.option(
     "--fraction-sampling", default=0.20, type=float,
-    help="Fraction of data to sample."
+    help="Fraction of data to sample. Default: 0.20."
 )
-@click.option("--seed-sampling", default=42, type=int, help="Random seed for sampling.")
+@click.option("--seed-sampling", default=42, type=int,
+              help="Random seed for sampling. Default: 42."
+)
 
 def main(**cli_kwargs):
     # kwargs
@@ -269,7 +271,7 @@ def main(**cli_kwargs):
         out_df = pl.DataFrame(out)
 
     else:
-        thresholds = cli_kwargs["thresholds"]
+        thresholds = cli_kwargs["thresholds"] or [0]
         n_fpc = None if fpc_map is None else len(fpc_map)
 
         evaluator = ConceptEvaluator(acts_h5_pth=acts_h5_pth, batch_size=bsz)

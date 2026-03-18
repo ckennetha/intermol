@@ -123,7 +123,7 @@ def normalize_sae(
     "--sae-ckpt-pth", type=click.Path(exists=True), required=True,
     help="Path to a trained model checkpoint"
 )
-@click.option("--layer", type=int, default=None, help="Layer of the base model")
+@click.option("--layer", type=int, required=True, help="Layer of the base model")
 @click.option(
     "--chunk-size", type=int, default=1024, help="Number of samples per chunk"
 )

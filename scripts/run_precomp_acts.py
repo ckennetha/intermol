@@ -91,33 +91,34 @@ def precomp_acts(
 @click.command()
 @click.option(
     "--data-pth", type=click.Path(exists=True), required=True,
-    help="Path to dataset.txt"
+    help="Path to .txt or one-column .smi file"
 )
 @click.option(
-    "--hidden-dim", type=int, required=True, help="Latent dimension of the SAE"
+    "--hidden-dim", type=int, required=True, help="SAE latent dimension"
 )
 @click.option(
     "--k", type=int, required=True, help="Number of top-k latents used in the SAE"
 )
 @click.option(
     "--sae-ckpt-pth", type=click.Path(exists=True), required=True,
-    help="Path to a trained model checkpoint"
+    help="Path to trained SAE checkpoint"
 )
-@click.option("--layer", type=int, default=None, help="Layer of the base model")
+@click.option("--layer", type=int, required=True, help="Base model layer")
 @click.option(
-    "--chunk-size", type=int, default=8192, help="Number of samples per chunk"
+    "--chunk-size", type=int, default=8192,
+    help="Number of samples per chunk. Default: 8192"
 )
 @click.option(
     "--outdir-pth", type=click.Path(file_okay=False), default='.',
-    help='Output directory'
+    help='Output directory. Default: current directory.'
 )
 @click.option(
     "--out-prefix", type=str, default=None,
-    help='Output file prefix. Defaults to current timestamp (e.g. 202503101430).'
+    help='Output file prefix. Default: current timestamp (e.g. 202503101430).'
 )
 @click.option(
     "--device", type=click.Choice(['auto', 'cpu', 'cuda']), default='auto',
-    help='Device for inference'
+    help='Inference device. Default: auto.'
 )
 def main(**cli_kwargs):
     # parse dataset
