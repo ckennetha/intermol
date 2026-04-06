@@ -150,7 +150,7 @@ def map_atom_idx_to_token_idx(tokens: list[str]) -> dict[int, int]:
     return mapping
 
 ## list all branch points in the SMILES
-def list_branch(tokens: list[str]) -> list:
+def list_branch(tokens: list[str]) -> list[dict]:
     main_tk_i = []
     main_tk_at_i = []
     brs = []
@@ -186,8 +186,69 @@ def list_branch(tokens: list[str]) -> list:
 
     main = {
         "depth": 0,
-        "pair_token_idxs": (0, len(tokens)-1),
+        "pair_atom_token_idxs": (0, len(tokens)-1),
         "atom_token_idx_in_branch": main_tk_at_i,
         "token_idx_in_branch": main_tk_i
     }
     return [main, *brs]
+
+## list all rings in the SMILES
+def list_ring(tokens: list[str], mol: Chem.Mol) -> list:
+    ai_to_ti = map_atom_idx_to_token_idx(tokens)
+
+    ring_atoms = mol.GetRingInfo().AtomRings()
+    rings = []
+    for ras in ring_atoms:
+        s_ra = min(ras)
+        s_ra_i = ai_to_ti[s_ra] # token at s_ra located before ring index
+
+        s_ri_is = set()
+        for tk in tokens[s_ra_i+1:]:
+            if _RX_RING.fullmatch(tk):
+                s_ri_is.add(tk)
+            elif _RX_BOND.fullmatch(tk):
+                continue
+            else:
+                break
+
+        ras_rev = sorted(ras, reverse=True)
+        ptr = 0
+        e_ra_i = None
+        within_ra_is = []
+        while len(within_ra_is) == 0:
+            e_ri_is = set()
+            e_ra_i = ai_to_ti[ras_rev[ptr]]
+            for tk in tokens[e_ra_i+1:]:
+                if _RX_RING.fullmatch(tk):
+                    e_ri_is.add(tk)
+                elif _RX_BOND.fullmatch(tk):
+                    continue
+                else:
+                    break
+            within_ra_is.extend(s_ri_is.intersection(e_ri_is))
+            ptr += 1
+
+        rings.append({
+            "index": ''.join(sorted(within_ra_is)),
+            "pair_atom_token_idxs": (s_ra_i, e_ra_i),
+            "atom_token_idx_in_ring": [ai_to_ti[ra] for ra in ras]
+        })
+        return rings
+
+## list all branch and ring syntax pairs in the SMILES
+def list_syntax_pair(
+    tokens: list[str]
+) -> tuple[list[tuple[int, int]], list[tuple[int, int]]]:
+    bp, rp = [], []
+    b_stack, r_map = [], dict()
+    for tk_i, tk in enumerate(tokens):
+        if tk == "(":
+            b_stack.append(tk_i)
+        elif tk == ")":
+            bp.append((b_stack.pop(), tk_i))
+        elif _RX_RING.fullmatch(tk):
+            if tk in r_map:
+                rp.append((r_map.pop(tk), tk_i))
+            else:
+                r_map[tk] = tk_i
+    return bp, rp
