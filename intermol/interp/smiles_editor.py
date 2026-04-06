@@ -1,10 +1,29 @@
+import re
 import time
 import random
 
-from typing import Literal
+from typing import Optional, Literal
 from rdkit import Chem
 
 from intermol.interp.molecular_concepts import _RX_TOKEN, _RX_RING, list_branch
+
+# utils
+## replace each token in a SMILES with `[MASK]`
+def enum_mask_smi(
+    smi: str,
+    start: int = 0,
+    end: Optional[int] = None,
+    exclude_token: Optional[re.Pattern] = None
+) -> list[tuple[str, int, str]]:
+    masked = []
+    tks = _RX_TOKEN.findall(smi)[start:end]
+    for tk_i, tk in enumerate(tks, start=start):
+        if exclude_token is not None and exclude_token.fullmatch(tk):
+            continue
+        m_smi = ''.join(tks[:tk_i]) + "[MASK]" + ''.join(tks[tk_i + 1:])
+        masked.append((m_smi, tk_i, tk))
+    return masked
+
 
 class SmilesEditor:
     def __init__(self, seed: int = None):
