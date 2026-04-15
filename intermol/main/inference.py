@@ -1,34 +1,95 @@
 import torch
 
+from dataclasses import dataclass
+from typing import Optional
+
 from intermol.main.sae import SparseAutoencoder
 from intermol.main.utils import load_model_from_file, load_model_from_HF
 
+# dataclass
+@dataclass
+class SAEInferenceConfig:
+    layer_idx: int
+    hidden_dim: int
+    k: int
+    sae_pth: str
+
+# core
 class SAEInferenceModule():
     def __init__(
         self,
-        hidden_dim: int,
-        k: int,
-        sae_pth: str,
-        layer_idx: int,
-        model_name: str = 'ibm/MoLFormer-XL-both-10pct',
+        config: SAEInferenceConfig | list[SAEInferenceConfig],
         device_name: str = 'auto'
     ):
         # device
-        if device_name == "auto":
-            self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+        if device_name == 'auto':
+            self.device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
         else:
             self.device = torch.device(device_name)
 
-        # models
+        # init SAE
+        if isinstance(config, SAEInferenceConfig):
+            config = [config]
+
+        ## store config for convenience
+        if len(config) == 1:
+            self.layer_idx = config[0].layer_idx
+            self.hidden_dim = config[0].hidden_dim
+            self.k = config[0].k
+
+        self.sae: dict[tuple[int, int, int], SparseAutoencoder] = {}
+        for cfg in config:
+            k = (cfg.layer_idx, cfg.hidden_dim, cfg.k)
+            sae = SparseAutoencoder(hidden_dim=k[1], k=k[2])
+            sae = load_model_from_file(sae, cfg.sae_pth)
+            sae.to(self.device)
+            self.sae[k] = sae
+
+    def _resolve_config(
+        self,
+        layer_idx: Optional[int] = None,
+        hidden_dim: Optional[int] = None,
+        k: Optional[int] = None
+    ) -> tuple[int, int, int]:
+        if any(x is None for x in (layer_idx, hidden_dim, k)):
+            if not hasattr(self, 'layer_idx'):
+                raise AttributeError(
+                    "layer_idx, hidden_dim, and k must be provided explicitly "
+                    "when more than one SAEInferenceConfig is loaded."
+                )
+        return (
+            layer_idx if layer_idx is not None else self.layer_idx,
+            hidden_dim if hidden_dim is not None else self.hidden_dim,
+            k if k is not None else self.k
+        )
+
+    def _get_sae(self, key: tuple[int, int, int]) -> SparseAutoencoder:
+        return self.sae[key]
+
+    @torch.no_grad()
+    def get_activations(
+        self,
+        base_acts: torch.Tensor,
+        layer_idx: Optional[int] = None,
+        hidden_dim: Optional[int] = None,
+        k: Optional[int] = None
+    ) -> torch.Tensor:
+        key = self._resolve_config(layer_idx, hidden_dim, k)
+        sae = self._get_sae(key)
+        return sae.encode_latents(base_acts)
+
+class SAEWithBaseModel(SAEInferenceModule):
+    def __init__(
+        self,
+        config: SAEInferenceConfig | list[SAEInferenceConfig],
+        device_name: str = 'auto',
+        model_name: str = 'ibm/MoLFormer-XL-both-10pct'
+    ):
+        super().__init__(config, device_name)
+
+        # load base model
         self.tokenizer, self.base_model = load_model_from_HF(model_name)
         self.base_model.to(self.device)
-
-        self.sae = SparseAutoencoder(hidden_dim, k)
-        self.sae = load_model_from_file(self.sae, sae_pth)
-        self.sae.to(self.device)
-
-        self.k = k
-        self.layer_idx = layer_idx
 
     def tokenize(self, smi: str) -> list[str]:
         return self.tokenizer.tokenize(smi)
@@ -37,68 +98,31 @@ class SAEInferenceModule():
         return self.tokenizer(smi, return_tensors="pt").to(self.device)
 
     @torch.no_grad()
-    def encode_both(self, smi: str) -> tuple[torch.Tensor, torch.Tensor]:
+    def get_hidden_states(self, smi: str) -> torch.Tensor:
         enc = self.tokenize_to_tensor(smi)
-        base_outs = self.base_model(**enc, output_hidden_states=True)
+        hs = self.base_model(**enc, output_hidden_states=True).hidden_states
+        return hs
 
-        base_acts = base_outs.hidden_states[self.layer_idx]
-        acts = self.sae.encode_latents(base_acts)
-        return base_acts, acts
-
-    @torch.no_grad()
-    def ablate_latents(
+    def encode(
         self,
         smi: str,
-        f: int | torch.IntTensor,
-        value: float,
-        do_scale: bool = False
-    ) -> tuple[torch.Tensor, tuple]:
-        enc = self.tokenize_to_tensor(smi)
-        base_outs = self.base_model(**enc, output_hidden_states=True)
-        base_acts = base_outs.hidden_states[self.layer_idx]
+        layer_idx: Optional[int] = None,
+        hidden_dim: Optional[int] = None,
+        k: Optional[int] = None
+    ) -> tuple[torch.Tensor, torch.Tensor]:
+        key = self._resolve_config(layer_idx, hidden_dim, k)
+        base_acts = self.get_hidden_states(smi)[key[0]]
+        acts = self._get_sae(key).encode_latents(base_acts)
+        return base_acts, acts
 
-        mod_recons = self._sae_modify(base_acts, f, value, do_scale)
-        mod_outs = self._base_modify(enc, mod_recons)
-        return mod_outs.logits, mod_outs.hidden_states
-
-    @torch.no_grad()
-    def get_logits(self, x: torch.Tensor) -> torch.Tensor:
-        x_norm = self.base_model.molformer.LayerNorm(x)
-        logits = self.base_model.lm_head(x_norm)
-        return logits
-
-    @torch.no_grad()
-    def _sae_modify(
-        self,
-        base_acts: torch.Tensor,
-        f: int | torch.IntTensor,
-        value: float,
-        do_scale: bool = False
-    ) -> torch.Tensor:
-        acts, mu, std = self.sae.encode(base_acts)
-        acts = self.sae.topK_activation(acts, k=self.k)
-
-        # modify
-        if do_scale:
-            acts[:, :, f] *= value
-        else:
-            acts[:, :, f] = value
-
-        mod_recons = self.sae.decode(acts, mu, std)
-        return mod_recons
-
-    @torch.no_grad()
-    def _base_modify(self, enc, acts):
-        def hook_fn(module, input, output):
-            return acts
-
-        # modify
-        target_layer = (
-            self.base_model.molformer.encoder.layer[self.layer_idx - 1].output
-        )
-        hook = target_layer.register_forward_hook(hook_fn)
-
-        outs = self.base_model(**enc, output_hidden_states=True)
-        hook.remove()
-
-        return outs
+    def encode_multi(
+        self, smi: str, configs: list[SAEInferenceConfig]
+    ) -> dict[tuple[int, int, int], tuple[torch.Tensor, torch.Tensor]]:
+        hs = self.get_hidden_states(smi)
+        output = {}
+        for cfg in configs:
+            key = (cfg.layer_idx, cfg.hidden_dim, cfg.k)
+            base_acts = hs[cfg.layer_idx]
+            acts = self.get_activations(base_acts, *key)
+            output[key] = (base_acts, acts)
+        return output

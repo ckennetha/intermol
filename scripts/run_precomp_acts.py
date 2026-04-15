@@ -8,7 +8,9 @@ from pathlib import Path
 from tqdm import tqdm
 from scipy.sparse import csc_matrix
 
-from intermol.main.inference import SAEInferenceModule
+from intermol.main.inference import (
+    SAEInferenceConfig, SAEInferenceModule, SAEWithBaseModel
+)
 
 def precomp_acts(
     samples: list[str],
@@ -49,7 +51,7 @@ def precomp_acts(
                 for i_cs, cs in enumerate(chunk_samples):
                     chunk_tokens[i_cs] = len(sae_module.tokenize(cs))
 
-                    _, acts = sae_module.encode_both(smi=cs)
+                    _, acts = sae_module.encode(cs)
                     acts = csc_matrix(acts.squeeze()[1:-1, :].cpu().numpy())
 
                     coll_data.append(acts.data)
@@ -128,13 +130,13 @@ def main(**cli_kwargs):
 
     # init module
     print("Initialize SAE inference module...")
-    sae_module = SAEInferenceModule(
-        hidden_dim = cli_kwargs['hidden_dim'],
-        k = cli_kwargs['k'],
-        sae_pth = cli_kwargs['sae_ckpt_pth'],
-        layer_idx = cli_kwargs['layer'],
-        device_name = cli_kwargs['device']
+    sae_config = SAEInferenceConfig(
+        cli_kwargs['layer'],
+        cli_kwargs['hidden_dim'],
+        cli_kwargs['k'],
+        cli_kwargs['sae_ckpt_pth']
     )
+    sae_module = SAEWithBaseModel(sae_config, device_name=cli_kwargs['device'])
 
     # run `precomp_acts`
     precomp_acts(

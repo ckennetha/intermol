@@ -35,18 +35,19 @@ pip install -e .
 We provide SAE weights trained on top of the open-source version of MolFormer-XL at layers 1, 3, 6, 9, and 12. MolFormer-XL weights are fetched on-the-fly from HuggingFace, while SAE weights must be downloaded separately. To extract SAE activations using a pretrained model:
 
 ```python
-from intermol.main.inference import SAEInferenceModule
+from intermol.main.inference import SAEInferenceConfig, SAEWithBaseModel
 
 SMILES = "c1ccccc1"
 
-sae = SAEInferenceModule(
+config = SAEInferenceConfig(
     hidden_dim=3072,
     k=128,
     sae_pth="norm-MOL-1-3072-128.pt", # normalized SAE weights
     layer_idx=1 # MolFormer-XL layer
 )
+sae = SAEWithBaseModel(config)
 
-mf_acts, sae_acts = sae.encode_both(SMILES)
+mf_acts, sae_acts = sae.encode(SMILES)
 # mf_acts: MolFormer-XL hidden states, sae_acts: SAE activations
 ```
 
