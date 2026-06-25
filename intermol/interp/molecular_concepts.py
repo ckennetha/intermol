@@ -1,4 +1,5 @@
 import re
+import bisect
 
 from tqdm.auto import tqdm
 from rdkit import Chem
@@ -11,10 +12,9 @@ _RX_TOKEN = re.compile(
 _RX_ATOM = re.compile(r'[a-zA-Z\*]') # loose atom check
 _RX_BOND = re.compile(r'[\-=#\$\\\/]')
 _RX_RING = re.compile(r'(\%[0-9]{2}|[0-9])')
-_RX_BRANCH = re.compile(r'[\(\)]')
 
 BOND_SYMBOL = {
-    "SINGLE": "", "DOUBLE": "=", "TRIPLE": "#", "AROMATIC": ":"
+    "SINGLE": "-", "DOUBLE": "=", "TRIPLE": "#", "AROMATIC": ":"
 }
 
 
@@ -47,7 +47,7 @@ def generate_atom_in_substructure(
             for i, nb in enumerate(nbs)
         )
 
-        sma = rt_idx + nbs_str
+        sma = tokens[rt_idx] + nbs_str
         out.append(sma)
         if len(nbs) > 0:
             try:
@@ -69,7 +69,7 @@ def generate_atom_in_substructure(
                         f"({nbx})" if (i_nbx + 1) < len(nb_nb) else nbx
                         for i_nbx, nbx in enumerate(nb_nb)
                     )
-                    out.append(f"[$({nb_at + nb_bn + rt_idx + nb_nb_str})]")
+                    out.append(f"[$({nb_at + nb_bn + tokens[rt_idx] + nb_nb_str})]")
 
     return out
 
@@ -126,7 +126,7 @@ class BatchLabelFromSmarts():
             fcs = RunFilterCatalog(self.catalog, smiles, n_threads)
             descs = [[e.GetDescription() for e in fc] for fc in fcs]
         else:
-            descs = self.sma_map.keys()
+            descs = list(self.sma_map.keys())
 
         # label
         n_smiles = len(smiles)
@@ -147,6 +147,42 @@ def map_atom_idx_to_token_idx(tokens: list[str]) -> dict[int, int]:
         if _RX_ATOM.search(tk):
             mapping[ctr] = i_tk
             ctr += 1
+    return mapping
+
+## map bond token indices to the corresp. paired atom indices
+def map_bond_token_idx_to_pair_atom_idx(
+    tokens: list[str], token_idx_to_atom_idx_map: dict[int, int]
+) -> dict[int, int]:
+    n_tokens = len(tokens)
+    atom_token_pos = list(token_idx_to_atom_idx_map.keys())
+    mapping = {}
+
+    cp_ring_idxs = set()
+    cp_ring_idx_atom = {}
+    for tk_i, tk in enumerate(tokens):
+        if _RX_RING.fullmatch(tk):
+            if tk not in cp_ring_idxs:
+                # within ring
+                cp_ring_idxs.add(tk)
+                ins = bisect.bisect_left(atom_token_pos, tk_i)
+                cp_ring_idx_atom[tk] = atom_token_pos[ins - 1]
+            else:
+                # outside ring
+                cp_ring_idxs.discard(tk)
+            continue
+
+        if _RX_BOND.fullmatch(tk):
+            ins = bisect.bisect_left(atom_token_pos, tk_i)
+            left_at_i = token_idx_to_atom_idx_map[atom_token_pos[ins - 1]]
+
+            next_tk = tokens[tk_i + 1] if (tk_i + 1) < n_tokens else None
+            right_at_i = (
+                token_idx_to_atom_idx_map[cp_ring_idx_atom[next_tk]]
+                if next_tk in cp_ring_idxs
+                else token_idx_to_atom_idx_map[atom_token_pos[ins]]
+            )
+
+            mapping[tk_i] = (left_at_i, right_at_i)
     return mapping
 
 ## list all branch points in the SMILES
@@ -233,7 +269,7 @@ def list_ring(tokens: list[str], mol: Chem.Mol) -> list:
             "pair_atom_token_idxs": (s_ra_i, e_ra_i),
             "atom_token_idx_in_ring": [ai_to_ti[ra] for ra in ras]
         })
-        return rings
+    return rings
 
 ## list all branch and ring syntax pairs in the SMILES
 def list_syntax_pair(
