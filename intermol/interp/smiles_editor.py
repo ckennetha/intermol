@@ -2,10 +2,14 @@ import re
 import time
 import random
 
-from typing import Optional, Literal
+from typing import Optional, Literal, TypeAlias
 from rdkit import Chem
 
 from intermol.interp.molecular_concepts import _RX_TOKEN, _RX_RING, list_branch
+
+ErrorType: TypeAlias = Literal[
+    'rings', 'parentheses', 'aromaticity', 'syntax', 'valence'
+]
 
 # utils
 ## replace each token in a SMILES with `[MASK]`
@@ -30,7 +34,7 @@ class SmilesEditor:
         self.seed = seed if seed is not None else int(time.time())
 
         # set seed
-        random.seed(seed)
+        random.seed(self.seed)
 
         # defaults
         self.error_map = {
@@ -64,7 +68,7 @@ class SmilesEditor:
                 elif in_s < 0.5:
                     # replace with existing ring index
                     ri_p1 = len(ris) + 1 # (+1)
-                    ris.append(str(ri_p1) if ri_p1 < 10 else f"%{ri}")
+                    ris.append(str(ri_p1) if ri_p1 < 10 else f"%{ri_p1}")
                     ris.remove(ri)
                     tokens.insert(ri_idx, random.choice(ris))
             else:
@@ -208,7 +212,7 @@ class SmilesEditor:
             if op_idxs:
                 tokens.insert(
                     random.choice(op_idxs),
-                    random.choice(bn_tks[:3]) if s < 0.5 else "("
+                    random.choice(bp_tks[:3]) if s < 0.5 else "("
                 )
         elif s < 0.8:
             try:
@@ -278,27 +282,34 @@ class SmilesEditor:
                     pass
         return smi
 
-    def generate_invalid(
+    def corrupt(
         self,
         smi: str, n: int = 1,
-        error: Literal[
-            'all',
-            'rings',
-            'parentheses',
-            'aromaticity',
-            'syntax',
-            'valence'
-        ] = 'all'
+        error: Literal['all'] | ErrorType | list[ErrorType] = 'all'
     ) -> list[dict[str, str | int]]:
         if error == "all":
             error = list(self.error_map.keys())
-        else:
+        elif isinstance(error, str):
             if error not in self.error_map:
                 raise ValueError(
                     "`error` must be one of "
                     f"{['all'] + list(self.error_map.keys())}, "
                     f"got {error!r}"
                 )
+            error = [error]
+        elif isinstance(error, list):
+            invals = [e for e in error if e not in self.error_map]
+            if invals:
+                raise ValueError(
+                    "`error` must be one of "
+                    f"{['all'] + list(self.error_map.keys())}, "
+                    f"got invalid entries {invals!r}"
+                )
+        else:
+            raise TypeError(
+                "`error` must be a str or list of str, "
+                f"got {type(error).__name__!r}"
+            )
 
         outs = []
         tokens = _RX_TOKEN.findall(smi)
@@ -308,16 +319,16 @@ class SmilesEditor:
             else:
                 e_tks = tokens.copy()
                 for _ in range(n):
-                    e_tks = self.error_map[et](e_tks)
+                    _, e_tks = self.error_map[et](e_tks)
                 e_smi = ''.join(e_tks)
             outs.append({"error": et, "error_Smiles": e_smi})
         return outs
 
     @staticmethod
-    def generate_noncanon(smi: str, n: int = 5, reps: int = 10) -> list[str]:
+    def augment(smi: str, n: int = 5, reps: int = 10) -> list[str]:
         if reps < n:
             raise ValueError(
-                "`reps` must be larger than `n`, ",
+                "`reps` must be larger than `n`, "
                 f"got n={n} and reps={reps}."
             )
 
