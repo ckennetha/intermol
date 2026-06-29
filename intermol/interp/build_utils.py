@@ -9,18 +9,18 @@ from intermol.interp.utils import h5_chunk_sorter
 
 # a map of activation bins for each SAE latent across activation ranges
 def build_bin_map(
-    acts_h5_pth: str,
-    outfn_pth: str, # default output dtype: np.uint16; available bits index: 0-14
+    acts_h5_path: str,
+    outfn_path: str, # default output dtype: np.uint16; available bits index: 0-14
     act_bins: list[tuple[float, float]] #[(lower-bound [incl.], upper-bound [excl.])]
 ) -> None:
-    with h5py.File(acts_h5_pth, 'r') as h5f:
+    with h5py.File(acts_h5_path, 'r') as h5f:
         n_samples = h5f.attrs['num_samples']
         n_features = h5f.attrs['num_features']
         chunks = h5_chunk_sorter(list(h5f.keys()))
 
         # init output
         binmap = np.memmap(
-            outfn_pth,
+            outfn_path,
             dtype=np.uint16,
             mode='w+',
             shape=(n_samples, n_features)
@@ -47,9 +47,7 @@ def build_bin_map(
                 mol_data = data[curr_data:e_data]
 
                 nz_cs = np.diff(mol_indptr)
-                nz_col_idxs = np.repeat(
-                    np.arange(n_features, dtype=np.int64), nz_cs
-                )
+                nz_col_idxs = np.repeat(np.arange(n_features, dtype=np.int64), nz_cs)
 
                 bins = np.zeros(n_features, dtype=np.uint16)
                 for i_b, (lb, ub) in enumerate(act_bins):
@@ -70,12 +68,12 @@ def build_bin_map(
 
             last_smi = curr_smi
 
-    print(f"Bin map has been successfully written to {outfn_pth}!")
+    print(f"Bin map has been successfully written to {outfn_path}!")
 
 # a dataset for evaluating latents with molecular concepts
 def build_eval_data(
-    data_pth: str,
-    outfn_pth: str,
+    data_path: str,
+    outfn_path: str,
     label_df: pl.DataFrame,
     desc_colnm: str,
     concept_colnm: str,
@@ -85,9 +83,9 @@ def build_eval_data(
     n_threads: int = 1
 ) -> None:
     # parse dataset
-    with open(data_pth, 'r') as h:
+    with open(data_path, 'r') as h:
         smiles_map = {
-            smi_i: smi.rstrip('\n') for smi_i, smi in enumerate(h.readlines())
+            smi.rstrip('\n'): smi_i for smi_i, smi in enumerate(h.readlines())
         }
         smiles = list(smiles_map.keys())
 
@@ -98,10 +96,10 @@ def build_eval_data(
 
     print("Initializing labeler...")
     labeler = BatchLabelFromSmarts(label_map, prefilter_smarts=prefilter_smarts)
-    nb = math.ceil(len(smiles) / batch_size)
+    nbs = math.ceil(len(smiles) / batch_size)
 
     outs = []
-    for nb in tqdm(range(nb), desc="Processing per batch...", leave=False):
+    for nb in tqdm(range(nbs), desc="Processing per batch...", leave=False):
         s = nb * batch_size
         e = s + batch_size
         b_smiles = smiles[s:e]
@@ -109,7 +107,7 @@ def build_eval_data(
         labels = labeler.batch_label(smiles=b_smiles, n_threads=n_threads)
         flat_labels = []
         for smi, label in labels.items():
-            smi_str = smi if use_smiles_indices else smiles_map[smi]
+            smi_str = smiles_map[smi] if use_smiles_indices else smi
             for concept, tk_idxs in label.items():
                 flat_labels.append({
                     "smiles": smi_str,
@@ -117,8 +115,12 @@ def build_eval_data(
                     "token_idxs": tk_idxs
                 })
 
-        outs.append(pl.DataFrame(flat_labels))
+        if flat_labels:
+            outs.append(pl.DataFrame(flat_labels))
 
-    print(f"Saving output to {outfn_pth}...")
-    pl.concat(outs).sink_parquet(outfn_pth)
-    print("Eval data saved successfully!")
+    if outs:
+        print(f"Saving output to {outfn_path}...")
+        pl.concat(outs).write_parquet(outfn_path)
+        print("Eval data saved successfully!")
+    else:
+        print("No matches found; output not written.")

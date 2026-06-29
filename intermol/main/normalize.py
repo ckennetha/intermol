@@ -29,13 +29,13 @@ def normalize(sae: torch.nn.Module, max_per_feat: torch.Tensor) -> torch.nn.Modu
 @torch.no_grad()
 def normalize_sae(
     data: list[str],
+    layer: int,
     hidden_dim: int,
     k: int,
-    sae_pth: str,
-    layer_idx: int,
-    chunk_size: int = 1000,
+    weights_path: str,
+    chunk_size: int = 1024,
     model_name: str = 'ibm/MoLFormer-XL-both-10pct',
-    outdir_pth: str = ".",
+    outdir_path: str = ".",
     device_name: str = "auto"
 ) -> None:
     # device
@@ -51,11 +51,11 @@ def normalize_sae(
 
     print("Loading SAE model...")
     sae = SparseAutoencoder(hidden_dim, k)
-    sae = load_model_from_file(sae, sae_pth)
+    sae = load_model_from_file(sae, weights_path)
     sae.to(device)
 
     # outdir_pth
-    outdir_pth = Path(outdir_pth)
+    outdir_pth = Path(outdir_path)
     outdir_pth.mkdir(exist_ok=True)
 
     # process chunks
@@ -72,8 +72,8 @@ def normalize_sae(
         enc_c = tokenizer(smi_c, padding=True, return_tensors='pt').to(device)
         base_acts_c = (
             base_model(**enc_c, output_hidden_states=True)
-            .hidden_states[layer_idx]
-            .squeeze()
+                .hidden_states[layer]
+                .squeeze(0)
         )
 
         _, _, base_fs = base_acts_c.shape
@@ -87,10 +87,10 @@ def normalize_sae(
         )
         max_acts, _ = torch.max(acts_masked, dim=0)
 
-        max_per_feat[int(smi_start / chunk_size), :] = max_acts
+        max_per_feat[smi_start // chunk_size, :] = max_acts
         n_tokens += base_acts.shape[0]
 
-        del base_acts, acts, max_acts
+        del enc_c, base_acts_c, base_acts, acts, max_acts
 
     # aggregate chunks
     max_per_feat, _ = torch.max(max_per_feat, dim=0)
@@ -110,9 +110,11 @@ def normalize_sae(
 # main
 @click.command()
 @click.option(
-    "--data-pth", type=click.Path(exists=True), required=True,
+    "--data-path", type=click.Path(exists=True), required=True,
     help="Path to dataset.txt"
 )
+
+@click.option("--layer", type=int, required=True, help="Layer of the base model")
 @click.option(
     "--hidden-dim", type=int, required=True, help="Latent dimension of the SAE"
 )
@@ -120,15 +122,19 @@ def normalize_sae(
     "--k", type=int, required=True, help="Number of top-k latents used in the SAE"
 )
 @click.option(
-    "--sae-ckpt-pth", type=click.Path(exists=True), required=True,
+    "--sae-ckpt-path", type=click.Path(exists=True), required=True,
     help="Path to a trained model checkpoint"
 )
-@click.option("--layer", type=int, required=True, help="Layer of the base model")
+
 @click.option(
     "--chunk-size", type=int, default=1024, help="Number of samples per chunk"
 )
 @click.option(
-    "--outdir-pth", type=click.Path(file_okay=False), default='.',
+    "--model-name", type=str, default='ibm/MoLFormer-XL-both-10pct',
+    help="Hugging Face model name"
+)
+@click.option(
+    "--outdir-path", type=click.Path(file_okay=False), default='.',
     help='Output directory'
 )
 @click.option(
@@ -136,18 +142,19 @@ def normalize_sae(
     help='Device for inference'
 )
 def main(**cli_kwargs):
-    with open(cli_kwargs["data_pth"], "r") as h:
+    with open(cli_kwargs["data_path"], "r") as h:
         smiles = [smi.rstrip("\n") for smi in h.readlines()]
 
     # normalize SAE
     normalize_sae(
         smiles,
+        cli_kwargs["layer"],
         cli_kwargs["hidden_dim"],
         cli_kwargs["k"],
-        cli_kwargs["sae_ckpt_pth"],
-        cli_kwargs["layer"],
+        cli_kwargs["sae_ckpt_path"],
         cli_kwargs["chunk_size"],
-        cli_kwargs["outdir_pth"],
+        cli_kwargs["model_name"],
+        cli_kwargs["outdir_path"],
         cli_kwargs["device"]
     )
 

@@ -7,12 +7,16 @@ from intermol.main.inference import SAEWithBaseModel
 # dataclass
 @dataclass
 class AblationConfig:
-    layer_idx: int
+    layer: int
     hidden_dim: int
     k: int
     f: int | torch.IntTensor
     value: float | torch.Tensor
     do_scale: bool = False
+
+    @property
+    def key(self) -> str:
+        return f"{self.layer}-{self.hidden_dim}-{self.k}"
 
 # core
 class LatentAblationModule(SAEWithBaseModel):
@@ -20,19 +24,18 @@ class LatentAblationModule(SAEWithBaseModel):
         self,
         smi: str,
         config: Optional[AblationConfig] = None,
+        key: Optional[str] = None,
         f: Optional[int | torch.IntTensor] = None,
         value: Optional[float | torch.Tensor] = None,
-        do_scale: bool = False,
-        layer_idx: Optional[int] = None,
-        hidden_dim: Optional[int] = None,
-        k: Optional[int] = None
+        do_scale: bool = False
     ) -> tuple[torch.Tensor, tuple[torch.Tensor, ...]]:
         if config is None:
             if f is None or value is None:
                 raise ValueError("must provide either `config` or both `f` and `value`")
-            key = self._resolve_config(layer_idx, hidden_dim, k)
+            key = self._resolve_config(key)
+            layer, hidden_dim, k = key.split("-")
             config = AblationConfig(
-                layer_idx=key[0], hidden_dim=key[1], k=key[2],
+                layer=int(layer), hidden_dim=int(hidden_dim), k=int(k),
                 f=f, value=value, do_scale=do_scale
             )
         logits, hs, _ = self._ablate_forward(smi, [config])
@@ -44,13 +47,9 @@ class LatentAblationModule(SAEWithBaseModel):
         return self._ablate_forward(smi, configs)
 
     def _make_hook(
-        self,
-        config: AblationConfig,
-        sae_acts_store: dict[int, torch.Tensor]
+        self, config: AblationConfig, sae_acts_store: dict[int, torch.Tensor]
     ):
-        key = self._resolve_config(config.layer_idx, config.hidden_dim, config.k)
-        sae = self._get_sae(key)
-
+        sae = self._get_sae(config.key)
         def hook_fn(module, input, output):
             acts, mu, std = sae.encode(output)
             acts = sae.topK_activation(acts, config.k)
@@ -58,9 +57,8 @@ class LatentAblationModule(SAEWithBaseModel):
                 acts[:, :, config.f] *= config.value
             else:
                 acts[:, :, config.f] = config.value
-            sae_acts_store[config.layer_idx] = acts
+            sae_acts_store[config.layer] = acts
             return sae.decode(acts, mu, std)
-
         return hook_fn
 
     @torch.no_grad()
@@ -72,7 +70,7 @@ class LatentAblationModule(SAEWithBaseModel):
         hooks = []
 
         for cfg in configs:
-            target = self.base_model.molformer.encoder.layer[cfg.layer_idx - 1].output
+            target = self.base_model.molformer.encoder.layer[cfg.layer - 1].output
             hooks.append(target.register_forward_hook(self._make_hook(cfg, mod_sae)))
 
         try:

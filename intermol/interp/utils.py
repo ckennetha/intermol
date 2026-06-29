@@ -67,5 +67,5 @@ def fast_sparse_pooling(
             mean_arr[state_smi, f] = mean_act
 
             if use_squared:
-                max_sq_arr[state_smi, f] += max_act ** 2
-                mean_sq_arr[state_smi, f] += mean_act ** 2
+                max_sq_arr[state_smi, f] = max_act ** 2
+                mean_sq_arr[state_smi, f] = mean_act ** 2

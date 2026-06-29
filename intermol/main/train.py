@@ -1,4 +1,3 @@
-import os
 import json
 import time
 
@@ -18,18 +17,20 @@ from intermol.main.sae_module import SAEModule
 # dataclass
 @dataclass
 class Config:
-    data_pth: str
-    col_sele: str
+    data_path: str
+    col_name: str
     layer: int
     hidden_dim: int
     k: int
+    model_name: str = 'ibm/MoLFormer-XL-both-10pct'
+    model_dim: int = 768
     batch_size: int = 128
     train_size: float = 0.8
     dead_steps_threshold: int = 5000
-    ckpt_pth: str = None
+    ckpt_path: str = None
     num_epochs: int = 1
-    lr: float = 2e-4
-    wd: float = 1e-2
+    opt_lr: float = 2e-4
+    opt_wd: float = 1e-2
     seed: int = None
 
     def __post_init__(self):
@@ -66,11 +67,11 @@ def build_config(config, **cli_kwargs) -> Config:
 
 # cfg: data
 @click.option(
-    "--data-pth", type=str, default=None,
+    "--data-path", type=str, default=None,
     help="Path to dataset.parquet"
 )
 @click.option(
-    "--col-sele", type=str, default=None,
+    "--col-name", type=str, default=None,
     help="Column name containing SMILES strings"
 )
 @click.option(
@@ -83,28 +84,31 @@ def build_config(config, **cli_kwargs) -> Config:
 )
 
 # cfg: SAE
-@click.option("--layer", type=int, required=True, help="Layer of the base model")
+@click.option("--layer", type=int, default=None, help="Layer of the base model")
 @click.option(
-    "--hidden-dim", type=int, required=True,
-    help="Latent dimension of the SAE"
+    "--hidden-dim", type=int, default=None, help="Latent dimension of the SAE"
 )
 @click.option(
-    "--k", type=int, required=True,
-    help="Number of top-k latents used in the SAE"
+    "--k", type=int, default=None, help="Number of top-k latents used in the SAE"
 )
+@click.option(
+    "--model-name", type=str, default='ibm/MoLFormer-XL-both-10pct',
+    help="Hugging Face model name"
+)
+@click.option("--model-dim", type=int, default=768, help="Base model hidden dimension")
 @click.option(
     "--dead-steps-threshold", type=int, default=None,
     help="Step threshold for tracking dead latents"
 )
 @click.option(
-    "--ckpt-pth", type=str, default=None,
+    "--ckpt-path", type=str, default=None,
     help="Path to a trained model checkpoint used to resume training"
 )
 
 # cfg: run
 @click.option("--num-epochs", type=int, default=None, help="Number of training epochs")
-@click.option("--lr", type=float, default=None, help="Learning rate")
-@click.option("--wd", type=float, default=None, help="Weight decay")
+@click.option("--opt-lr", type=float, default=None, help="Learning rate")
+@click.option("--opt-wd", type=float, default=None, help="Weight decay")
 @click.option("--seed", type=int, default=None, help="Random seed")
 def main(config, **cli_kwargs):
     # build config
@@ -132,21 +136,24 @@ def main(config, **cli_kwargs):
 
     # data
     data = MolDataModule(
-        data_pth = cfg.data_pth,
-        col_sele = cfg.col_sele,
-        batch_size = cfg.batch_size,
-        train_size = cfg.train_size,
-        num_workers = os.cpu_count() - 1,
-        seed = cfg.seed
+        cfg.data_path,
+        cfg.col_name,
+        cfg.batch_size,
+        cfg.train_size,
+        cfg.seed
     )
 
     # models
     model = SAEModule(
-        hidden_dim = cfg.hidden_dim, k = cfg.k,
-        model_hook_pos = cfg.layer,
-        lr = cfg.lr, wd = cfg.wd,
-        batch_size = cfg.batch_size,
-        dead_steps_threshold = cfg.dead_steps_threshold
+        cfg.layer,
+        cfg.hidden_dim,
+        cfg.k,
+        cfg.opt_lr,
+        cfg.opt_wd,
+        cfg.model_name,
+        cfg.model_dim,
+        cfg.batch_size,
+        cfg.dead_steps_threshold
     )
     wandb_logger.watch(model, log='all')
 
@@ -173,8 +180,8 @@ def main(config, **cli_kwargs):
         gradient_clip_val=1.0,
     )
 
-    if cfg.ckpt_pth is not None:
-        trainer.fit(model, data, ckpt_path=cfg.ckpt_pth)
+    if cfg.ckpt_path is not None:
+        trainer.fit(model, data, ckpt_path=cfg.ckpt_path)
     else:
         trainer.fit(model, data)
 

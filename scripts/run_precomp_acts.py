@@ -8,26 +8,25 @@ from pathlib import Path
 from tqdm import tqdm
 from scipy.sparse import csc_matrix
 
-from intermol.main.inference import (
-    SAEInferenceConfig, SAEInferenceModule, SAEWithBaseModel
-)
+from intermol.main.inference import SAEInferenceConfig, SAEWithBaseModel
 
 def precomp_acts(
     samples: list[str],
-    sae_module: SAEInferenceModule,
+    sae_config: SAEInferenceConfig,
+    sae_module: SAEWithBaseModel,
     chunk_size: int = 1024,
-    outdir_pth: str = ".",
+    outdir_path: str = ".",
     out_prefix: str = None
 ) -> None:
-    outdir_pth = Path(outdir_pth)
+    outdir_path = Path(outdir_path)
 
     n_samples = len(samples)
-    n_features = sae_module.sae.hidden_dim
+    n_features = sae_config.hidden_dim
     n_chunks = math.ceil(n_samples / chunk_size)
 
     if out_prefix is None:
         out_prefix = datetime.now().strftime("%Y%m%d%H%M")
-    h5f_pth = outdir_pth / f'{out_prefix}_acts.h5'
+    h5f_pth = outdir_path / f'{out_prefix}_acts.h5'
     with h5py.File(h5f_pth, 'w') as h5f:
         # attrs
         h5f.attrs['num_chunks'] = n_chunks
@@ -92,9 +91,10 @@ def precomp_acts(
 # main
 @click.command()
 @click.option(
-    "--data-pth", type=click.Path(exists=True), required=True,
+    "--data-path", type=click.Path(exists=True), required=True,
     help="Path to .txt or one-column .smi file"
 )
+@click.option("--layer", type=int, required=True, help="Base model layer")
 @click.option(
     "--hidden-dim", type=int, required=True, help="SAE latent dimension"
 )
@@ -102,16 +102,15 @@ def precomp_acts(
     "--k", type=int, required=True, help="Number of top-k latents used in the SAE"
 )
 @click.option(
-    "--sae-ckpt-pth", type=click.Path(exists=True), required=True,
+    "--sae-ckpt-path", type=click.Path(exists=True), required=True,
     help="Path to trained SAE checkpoint"
 )
-@click.option("--layer", type=int, required=True, help="Base model layer")
 @click.option(
     "--chunk-size", type=int, default=8192,
     help="Number of samples per chunk. Default: 8192"
 )
 @click.option(
-    "--outdir-pth", type=click.Path(file_okay=False), default='.',
+    "--outdir-path", type=click.Path(file_okay=False), default='.',
     help='Output directory. Default: current directory.'
 )
 @click.option(
@@ -122,10 +121,14 @@ def precomp_acts(
     "--device", type=click.Choice(['auto', 'cpu', 'cuda']), default='auto',
     help='Inference device. Default: auto.'
 )
+@click.option(
+    "--model-name", type=str, default='ibm/MoLFormer-XL-both-10pct',
+    help="Hugging Face model name"
+)
 def main(**cli_kwargs):
     # parse dataset
     print("Parse dataset...")
-    with open(cli_kwargs['data_pth'], 'r') as h:
+    with open(cli_kwargs['data_path'], 'r') as h:
         smiles = [smi.rstrip('\n') for smi in h.readlines()]
 
     # init module
@@ -134,16 +137,20 @@ def main(**cli_kwargs):
         cli_kwargs['layer'],
         cli_kwargs['hidden_dim'],
         cli_kwargs['k'],
-        cli_kwargs['sae_ckpt_pth']
+        cli_kwargs['sae_ckpt_path']
     )
-    sae_module = SAEWithBaseModel(sae_config, device_name=cli_kwargs['device'])
+    sae_module = SAEWithBaseModel(
+        sae_config, cli_kwargs['device'], cli_kwargs['model_name']
+    )
 
     # run `precomp_acts`
     precomp_acts(
-        smiles, sae_module,
-        chunk_size=cli_kwargs['chunk_size'],
-        outdir_pth=cli_kwargs['outdir_pth'],
-        out_prefix=cli_kwargs['out_prefix']
+        smiles,
+        sae_config,
+        sae_module,
+        cli_kwargs['chunk_size'],
+        cli_kwargs['outdir_path'],
+        cli_kwargs['out_prefix']
     )
 
 if __name__ == '__main__':

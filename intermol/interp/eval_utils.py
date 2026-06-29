@@ -38,9 +38,7 @@ class SMDOutput:
 
 # core funcs
 class ConceptEvaluator:
-    def __init__(
-        self, acts_h5_pth: str, batch_size: int = 65536
-    ):
+    def __init__(self, acts_h5_pth: str, batch_size: int = 65536):
         self.acts_h5_pth = acts_h5_pth
         self.batch_size = batch_size # batch size for accessing np.memmap
 
@@ -148,6 +146,8 @@ class ConceptEvaluator:
                                 nz_cs = np.diff(mol_indptr)
                                 fs_sele = np.flatnonzero(nz_cs)
 
+                                p_sele = np.empty((1, 1), dtype=np.int16)
+
                             try:
                                 rows = np.concatenate(ls)
                                 cols = np.repeat(
@@ -191,8 +191,7 @@ class ConceptEvaluator:
 
             del (
                 mol_indptr, mol_indices, mol_data,
-                cs_sele, fs_sele, p_sele,
-                cs_no_sele, fs_no_sele, p_no_sele
+                cs_sele, fs_sele, p_sele
             )
 
             nr = self.cm.shape[0]
@@ -308,7 +307,7 @@ class ConceptEvaluator:
                             else:
                                 nz_cnt = np.diff(mol_indptr)
                                 fs_sele = np.flatnonzero(nz_cnt)
-                                p_sele = np.empty((1, 1), dtype=np.uint64)
+                                p_sele = np.empty((1, 1), dtype=np.int16)
 
                             # merge and flat labels
                             rows = []
@@ -386,8 +385,7 @@ class ConceptEvaluator:
 
             del (
                 mol_indptr, mol_indices, mol_data,
-                cs_sele, fs_sele, p_sele,
-                cs_no_sele, fs_no_sele, p_no_sele
+                cs_sele, fs_sele, p_sele
             )
 
             nr = self.cm.shape[0]
@@ -425,7 +423,7 @@ def calculate_smd(
         cm_args = dict(shape=(n_concepts, n_features), dtype=np.float32)
         neg_arr, pos_arr = np.zeros(**cm_args), np.zeros(**cm_args)
         neg_sq_arr, pos_sq_arr = np.zeros(**cm_args), np.zeros(**cm_args)
-        ctr = np.zeros((n_concepts, 2), dtype=np.uint32) # ctr[0]: 'neg'; ctr[1]: 'pos'
+        ctr = np.zeros((n_concepts, 2), dtype=np.uint32) # ctr[:, 0]: 'neg'; ctr[:, 1]: 'pos'
 
         curr_smi = 0
         with tqdm(total=len(samples), desc="Processing sample...", leave=False) as pbar:
@@ -921,16 +919,16 @@ def fast_dense_eval_smd(
         preds_pooled = preds / label_cnts
         preds_sq_pooled = preds_sq / label_cnts
 
-        neg_ch = np.zeros(neg_arr.shape[0], dtype=np.bool_)
+        neg_check = np.zeros(neg_arr.shape[0], dtype=np.bool_)
         for c_i in range(n_cs):
             c = cs_sele[c_i]
 
-            if not neg_cnt[c]:
+            if not neg_check[c]:
                 for f in nz_fs:
                     neg_arr[c, f] += neg_preds[c_i, f]
                     neg_sq_arr[c, f] += neg_preds_sq[c_i, f]
                 ctr[c, 0] +=  neg_cnt[c_i]
-                neg_ch[c] = True
+                neg_check[c] = True
 
             for f in nz_fs:
                 pos_arr[c, f] += preds_pooled[c_i, f]

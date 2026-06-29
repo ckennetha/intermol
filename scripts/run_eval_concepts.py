@@ -12,7 +12,7 @@ pl.Config.set_engine_affinity(engine="streaming")
 
 # only supports the Parquet format from 'intermol.interp.build_utils.build_eval_data'
 def prep_data(
-    data_pth: str,
+    data_path: str,
     sample_colname: str,
     concept_colname: str,
     label_colname: str,
@@ -24,7 +24,7 @@ def prep_data(
     concepts_from_fpc: Optional[list[int]] = None
 ) -> dict[int, dict[int, list[int]]]:
     # parse data_df
-    data_df = pl.scan_parquet(data_pth)
+    data_df = pl.scan_parquet(data_path)
 
     # map each concept to its indices based on the label
     # and ensures alignment with the correct concept
@@ -59,20 +59,20 @@ def prep_data(
     # pack data
     print("Packing data...")
     p_data = defaultdict(dict)
-    for b in data_df.collect_batches(chunk_size=batch_size, maintain_order=False):
+    for b in data_df.collect_batches(chunk_size=batch_size, maintain_order=True):
         for r in b.iter_rows(named=True):
             p_data[r[sample_colname]][r["concept_idx"]] = r[label_colname]
     return dict(p_data)
 
 # only supports csv and its derivative formats
 def prep_labels(
-    label_pth: str,
+    label_path: str,
     index_colname: str,
     concept_colname: str,
     desc_colname: Optional[str] = None
 ) -> tuple[dict[str, int], dict[int, str] | None]:
     # parse label_df
-    label_df = pl.read_csv(label_pth, separator="\t")
+    label_df = pl.read_csv(label_path, separator="\t")
     index_list = label_df[index_colname].to_list()
 
     # build mappings
@@ -86,10 +86,10 @@ def prep_labels(
 
 # build fpc map from 'calculate_smd' output; only supports tsv
 def prep_fpc(
-    fpc_pth: str, score_threshold: float = 0, k: int = 64
+    fpc_path: str, score_threshold: float = 0, k: int = 64
 ) -> tuple[list[int], dict[int, list[int]], pl.DataFrame]:
     # parse fpc_df
-    fpc_df = pl.read_csv(fpc_pth, separator="\t")
+    fpc_df = pl.read_csv(fpc_path, separator="\t")
     fpc_df = (
         fpc_df
         .filter(
@@ -127,26 +127,26 @@ def prep_fpc(
 
 # paths
 @click.option(
-    "--data-pth", required=True, type=click.Path(exists=True),
+    "--data-path", required=True, type=click.Path(exists=True),
     help="Path to input .parquet file."
 )
 @click.option(
-    "--acts-h5-pth", required=True, type=click.Path(exists=True),
+    "--acts-h5-path", required=True, type=click.Path(exists=True),
     help="Path to precomputed activations h5 file."
 )
 @click.option(
-    "--label-pth", required=True, type=click.Path(exists=True),
+    "--label-path", required=True, type=click.Path(exists=True),
     help="Path to concept label tsv."
 )
 @click.option(
-    "--outdir-pth", required=True, type=click.Path(file_okay=False),
+    "--outdir-path", required=True, type=click.Path(file_okay=False),
     help="Output directory."
 )
 @click.option(
     "--outfn", required=True, type=str, help="Output filename (without extension)."
 )
 @click.option(
-    "--fpc-pth", required=False, type=click.Path(exists=True), default=None,
+    "--fpc-path", required=False, type=click.Path(exists=True), default=None,
     help="Path to 'calculate_smd' or prefiltering output (optional). " \
     "If not provided, concepts will be evaluated across all SAE latents."
 )
@@ -207,84 +207,74 @@ def prep_fpc(
     "--fraction-sampling", default=0.20, type=float,
     help="Fraction of data to sample. Default: 0.20."
 )
-@click.option("--seed-sampling", default=42, type=int,
-              help="Random seed for sampling. Default: 42."
+@click.option(
+    "--seed-sampling", default=42, type=int,
+    help="Random seed for sampling. Default: 42."
 )
 
 def main(**cli_kwargs):
     # kwargs
-    fpc_pth = cli_kwargs["fpc_pth"]
+    fpc_path = cli_kwargs["fpc_path"]
     concept_colname = cli_kwargs["concept_colname"]
     is_prefilter = cli_kwargs["is_prefilter"]
 
     # sanity check
-    if is_prefilter and fpc_pth is not None:
-        raise click.UsageError("--fpc-pth is not used in prefilter mode.")
+    if is_prefilter and fpc_path is not None:
+        raise click.UsageError("--fpc-path is not used in prefilter mode.")
 
     # build labels
     concept_to_idx_map, desc_to_idx_map_r = prep_labels(
-        label_pth = cli_kwargs["label_pth"],
-        index_colname = cli_kwargs["index_colname"],
-        concept_colname = concept_colname,
-        desc_colname = cli_kwargs["desc_colname"]
+        cli_kwargs["label_path"],
+        cli_kwargs["index_colname"],
+        concept_colname,
+        cli_kwargs["desc_colname"]
     )
     n_concepts = len(concept_to_idx_map) # use total number of available concepts
     concept_to_idx_map_r = {v: k for k, v in concept_to_idx_map.items()}
 
     # build fpc if provided
     concepts_from_fpc, fpc_map, fpc_lookup = None, None, None
-    if fpc_pth is not None:
+    if fpc_path is not None:
         concepts_from_fpc, fpc_map, fpc_lookup = prep_fpc(
-            fpc_pth=fpc_pth,
-            score_threshold = cli_kwargs["score_threshold"],
-            k = cli_kwargs["k"]
+            fpc_path, cli_kwargs["score_threshold"], cli_kwargs["k"]
         )
 
     # build data
     bsz = cli_kwargs["batch_size"]
     data = prep_data(
-        data_pth = cli_kwargs["data_pth"],
-        sample_colname = cli_kwargs["sample_colname"],
-        concept_colname = concept_colname,
-        label_colname = cli_kwargs["label_colname"],
-        mapping = concept_to_idx_map,
-        batch_size = bsz,
-        is_sampling = cli_kwargs["is_sampling"],
-        fraction_sampling = cli_kwargs["fraction_sampling"],
-        seed_sampling = cli_kwargs["seed_sampling"],
-        concepts_from_fpc = concepts_from_fpc
+        cli_kwargs["data_path"],
+        cli_kwargs["sample_colname"],
+        concept_colname,
+        cli_kwargs["label_colname"],
+        concept_to_idx_map,
+        bsz,
+        cli_kwargs["is_sampling"],
+        cli_kwargs["fraction_sampling"],
+        cli_kwargs["seed_sampling"],
+        concepts_from_fpc
     )
 
     # init prefilter or eval
-    acts_h5_pth = cli_kwargs["acts_h5_pth"]
+    acts_h5_path = cli_kwargs["acts_h5_path"]
     use_pooling = cli_kwargs["use_pooling"]
 
     if is_prefilter:
-        out = calculate_smd(
-            acts_h5_pth=acts_h5_pth,
-            samples=data,
-            n_concepts=n_concepts,
-            use_pooling=use_pooling
-        )
+        out = calculate_smd(acts_h5_path, data, n_concepts, use_pooling)
 
         # build out_df
         out_df = pl.DataFrame(out)
 
     else:
         thresholds = cli_kwargs["thresholds"] or [0]
-        n_fpc = None if fpc_map is None else len(fpc_map)
+        n_fpc = cli_kwargs["k"]
 
-        evaluator = ConceptEvaluator(acts_h5_pth=acts_h5_pth, batch_size=bsz)
+        evaluator = ConceptEvaluator(acts_h5_path, bsz)
         if use_pooling:
             out = evaluator.eval_substructure(
-                samples=data, n_concepts=n_concepts, thresholds=thresholds,
-                fpc_map=fpc_map, n_fpc=n_fpc
+                data, n_concepts, thresholds, fpc_map, n_fpc
             )
         else:
-            out = evaluator.eval(
-                samples=data, n_concepts=n_concepts, thresholds=thresholds,
-                fpc_map=fpc_map, n_fpc=n_fpc
-            )
+            out = evaluator.eval(data, n_concepts, thresholds, fpc_map, n_fpc)
 
         # build out_df
         out_df = pl.DataFrame(out).with_columns(pl.col(pl.Float64).round(4))
@@ -316,9 +306,9 @@ def main(**cli_kwargs):
     )
 
     # write output to tsv
-    outfn_pth = Path(cli_kwargs["outdir_pth"]) / (cli_kwargs["outfn"] + ".tsv")
-    out_df.lazy().sink_csv(outfn_pth, separator="\t")
-    print(f"Saved successfully to {outfn_pth}.")
+    outfn_path = Path(cli_kwargs["outdir_path"]) / (cli_kwargs["outfn"] + ".tsv")
+    out_df.lazy().sink_csv(outfn_path, separator="\t")
+    print(f"Saved successfully to {outfn_path}.")
 
 
 if __name__ == '__main__':

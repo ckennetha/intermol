@@ -18,8 +18,8 @@ from intermol.interp.molecular_concepts import (
 from intermol.interp.utils import h5_chunk_sorter, fast_spearmanr
 
 # nonzero density => num. of activated tokens / num. of tokens
-def get_latent_nonzero_density(acts_h5_pth: str) -> pl.DataFrame:
-    with h5py.File(acts_h5_pth, 'r') as h5f:
+def get_latent_nonzero_density(acts_h5_path: str) -> pl.DataFrame:
+    with h5py.File(acts_h5_path, 'r') as h5f:
         chunks = h5_chunk_sorter(list(h5f.keys()))
         n_features = h5f.attrs["num_features"]
         n_samples = h5f.attrs["num_samples"]
@@ -80,20 +80,20 @@ def get_latent_nonzero_density(acts_h5_pth: str) -> pl.DataFrame:
 
 # token preference => latent token activation preference
 def get_latent_token_preference(
-    acts_h5_pth: str,
-    data_pth: str,
-    model_name: str = 'ibm/MoLFormer-XL-both-10pct',
+    acts_h5_path: str,
+    data_path: str,
     inverse: bool = False, # if True, count non-activated tokens
-    gtc_pth: Optional[str] = None # JSON file path for dataset total token count
+    gtc_pth: Optional[str] = None, # JSON file path for dataset total token count
+    model_name: str = 'ibm/MoLFormer-XL-both-10pct'
 ) -> pl.DataFrame:
     # parse dataset
-    with open(data_pth, 'r') as h:
+    with open(data_path, 'r') as h:
         smiles = [smi.rstrip("\n") for smi in h.readlines()]
 
     # init tokenizer
     tokenizer = load_model_from_HF(model_name, tokenizer_only=True)
 
-    with h5py.File(acts_h5_pth, 'r') as h5f:
+    with h5py.File(acts_h5_path, 'r') as h5f:
         chunks = h5_chunk_sorter(list(h5f.keys()))
         n_features = h5f.attrs['num_features']
         n_samples = h5f.attrs['num_samples']
@@ -117,7 +117,7 @@ def get_latent_token_preference(
                 for nt in molptr:
                     smi = smiles[curr_smi]
                     tk_ids = np.array(
-                        tokenizer.encode(smi, add_special_tokeens=False),
+                        tokenizer.encode(smi, add_special_tokens=False),
                         dtype=np.uint32
                     )
 
@@ -224,9 +224,9 @@ def get_latent_token_preference(
 
 # position latents
 def get_positional_latents(
-    acts_h5_pth: str, num_tokens_eval_threshold: int = 3
+    acts_h5_path: str, num_tokens_eval_threshold: int = 3
 ) -> pl.DataFrame:
-    with h5py.File(acts_h5_pth, 'r') as h5f:
+    with h5py.File(acts_h5_path, 'r') as h5f:
         chunks = h5_chunk_sorter(list(h5f.keys()))
         n_features = h5f.attrs['num_features']
         n_samples = h5f.attrs['num_samples']

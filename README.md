@@ -40,10 +40,10 @@ from intermol.main.inference import SAEInferenceConfig, SAEWithBaseModel
 SMILES = "c1ccccc1"
 
 config = SAEInferenceConfig(
+    layer=1 # MolFormer-XL layer
     hidden_dim=3072,
     k=128,
-    sae_pth="norm-MOL-1-3072-128.pt", # normalized SAE weights
-    layer_idx=1 # MolFormer-XL layer
+    weights_path="norm-MOL-1-3072-128.pt", # normalized SAE weights
 )
 sae = SAEWithBaseModel(config)
 
@@ -55,35 +55,38 @@ mf_acts, sae_acts = sae.encode(SMILES)
 To extract SAE activations in bulk, we provide a command line interface (`run-precomp-acts`) that efficiently stores the results as decomposed CSC sparse matrix format using `h5py`:
 
 ```
-usage: run-precomp-acts [-h] --data-pth DATA_PTH --hidden-dim HIDDEN_DIM --k K
-                        --sae-ckpt-pth SAE_CKPT_PTH --layer LAYER
-                        [--chunk-size CHUNK_SIZE] [--outdir-pth OUTDIR_PTH]
+usage: run-precomp-acts [-h] --data-path DATA_PATH
+                        --layer LAYER --hidden-dim HIDDEN_DIM --k K
+                        --sae-ckpt-path SAE_CKPT_PATH
+                        [--chunk-size CHUNK_SIZE] [--outdir-path OUTDIR_PATH]
                         [--out-prefix OUT_PREFIX] [--device {auto,cpu,cuda}]
+                        [--model-name MODEL_NAME]
 
 options:
     -h, --help                    show this help message and exit
-    --data-pth DATA_PTH           Path to .txt or one-column .smi file
+    --data-path DATA_PATH         Path to .txt or one-column .smi file
     --hidden-dim HIDDEN_DIM       SAE latent dimension
     --k K                         Number of top-k SAE latents
-    --sae-ckpt-pth SAE_CKPT_PTH   Path to trained SAE checkpoint
+    --sae-ckpt-path SAE_CKPT_PATH Path to trained SAE checkpoint
     --layer LAYER                 MolFormer-XL layer
     --chunk-size CHUNK_SIZE       Number of samples per chunk. Default: 8192
-    --outdir-pth OUTDIR_PTH       Output directory. Default: current directory
+    --outdir-path OUTDIR_PATH     Output directory. Default: current directory
     --out-prefix OUT_PREFIX       Output filename prefix. Default: current timestamp
     --device {auto,cpu,cuda}      Inference device. Default: auto
+    --model-name MODEL_NAME       Hugging Face model name. Default: ibm/MoLFormer-XL-both-10pct
 ```
 
 ### Concept Evaluation
 For evaluating association between specific SAE latents and atom-level molecular concepts, we use a two-step approach: first filtering latents by standardized mean difference (SMD) using the `--is-prefilter` flag, then concept presence classification with binarized activations, evaluated by F1 score. We provide `run-eval-concepts` with Numba-accelerated computation:
 
 ```
-usage: run-eval-concepts [-h] --data-pth DATA_PTH --acts-h5-pth ACTS_H5_PTH
-                         --label-pth LABEL_PTH --outdir-pth OUTDIR_PTH
+usage: run-eval-concepts [-h] --data-path DATA_PATH --acts-h5-path ACTS_H5_PATH
+                         --label-path LABEL_PATH --outdir-path OUTDIR_PATH
                          --outfn OUTFN --sample-colname SAMPLE_COLNAME
                          --concept-colname CONCEPT_COLNAME
                          --label-colname LABEL_COLNAME
                          --index-colname INDEX_COLNAME
-                         [--fpc-pth FPC_PTH] [--desc-colname DESC_COLNAME]
+                         [--fpc-path FPC_PATH] [--desc-colname DESC_COLNAME]
                          [--thresholds THRESHOLDS] [--use-pooling]
                          [--is-prefilter] [--batch-size BATCH_SIZE]
                          [--score-threshold SCORE_THRESHOLD] [--k K]
@@ -94,12 +97,12 @@ options:
     -h, --help                          show this help message and exit
 
     path options:
-    --data-pth DATA_PTH                 Path to input .parquet file
-    --acts-h5-pth ACTS_H5_PTH           Path to precomputed activations .h5 file
-    --label-pth LABEL_PTH               Path to concept label .tsv file
-    --outdir-pth OUTDIR_PTH             Output directory
+    --data-path DATA_PATH                 Path to input .parquet file
+    --acts-h5-path ACTS_H5_PATH           Path to precomputed activations .h5 file
+    --label-path LABEL_PATH               Path to concept label .tsv file
+    --outdir-path OUTDIR_PATH             Output directory
     --outfn OUTFN                       Output filename (without extension)
-    --fpc-pth FPC_PTH                   Path to prefiltering output. If not provided,
+    --fpc-path FPC_PATH                   Path to prefiltering output. If not provided,
                                         concepts are evaluated across all SAE latents
     column name options:
     --sample-colname SAMPLE_COLNAME     Column name for samples
@@ -133,10 +136,10 @@ options:
 Below is an example of prefiltering single-token concepts with a sampled dataset. For multi-token concepts, simply set the `--use-pooling` flag.
 ```bash
 run-eval-concepts \
-    --data-pth valid_dataset.parquet \
-    --acts-h5-pth valid_acts.h5 \
-    --label-pth SMARTS_ignChi_f10.tsv \
-    --outdir-pth ../results_layer1/ \
+    --data-path valid_dataset.parquet \
+    --acts-h5-path valid_acts.h5 \
+    --label-path SMARTS_ignChi_f10.tsv \
+    --outdir-path ../results_layer1/ \
     --outfn valid_smd \
     --sample-colname smiles \
     --concept-colname concept \
@@ -149,14 +152,14 @@ run-eval-concepts \
 ```
 
 #### SAE Latent-Concept Association
-To run association analysis on single-token concepts, remove the `--is-prefilter` flag. If `--fpc-pth` is supplied with prefiltering output, set `--score-threshold` to filter by SMD score and `--k` for the number of top-k latents. As before, set `--use-pooling` for multi-token concepts.
+To run association analysis on single-token concepts, remove the `--is-prefilter` flag. If `--fpc-path` is supplied with prefiltering output, set `--score-threshold` to filter by SMD score and `--k` for the number of top-k latents. As before, set `--use-pooling` for multi-token concepts.
 ```bash
 run-eval-concepts \
-    --data-pth valid_dataset.parquet \
-    --acts-h5-pth valid_acts.h5 \
-    --label-pth SMARTS_ignChi_f10.tsv \
-    --fpc-pth valid_smd.tsv \
-    --outdir-pth ../results_layer1/ \
+    --data-path valid_dataset.parquet \
+    --acts-h5-path valid_acts.h5 \
+    --label-path SMARTS_ignChi_f10.tsv \
+    --fpc-path valid_smd.tsv \
+    --outdir-path ../results_layer1/ \
     --outfn valid_eval \
     --sample-colname smiles \
     --concept-colname concept \
@@ -170,9 +173,7 @@ run-eval-concepts \
 ## Notebooks
 1. [`activation_dist.ipynb`](notebooks/activation_dist.ipynb) &mdash; Visualizing activation distribution of a specific SAE latent. Supports coloring by specific tokens and SMARTS patterns.
 
-2. [`logit_lens.ipynb`](notebooks/logit_lens.ipynb) &mdash; Visualizing how MolFormer-XL predicts masked tokens and how predictions evolve across layers, showing top predicted tokens at each layer. Supports latent ablation to assess the causal effect of specific SAE latent(s).
-
-3. [`probe_latents.ipynb`](notebooks/probe_latents.ipynb) &mdash; Extracting SAE activations and other chemical features into a `.h5` file for interpretable linear probing experiments.
+2. [`probe_latents.ipynb`](notebooks/probe_latents.ipynb) &mdash; Extracting SAE activations and other chemical features into a `.h5` file for interpretable linear probing experiments.
 
 ## License
 This project is licensed under the [MIT License](LICENSE).

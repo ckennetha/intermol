@@ -26,23 +26,23 @@ def load_model_from_HF(
 # load model from a torch weights file
 def load_model_from_file(
     model: torch.nn.Module,
-    file_pth: str,
+    file_path: str,
     from_lightning: bool = False,
-    mode: str="eval"
+    do_eval: bool = True
 ) -> torch.nn.Module:
-    ws = torch.load(file_pth, map_location="cpu", weights_only=True)
+    ws = torch.load(file_path, map_location="cpu", weights_only=True)
 
     # check if the output is from torch-lightning
     if from_lightning:
         ws = {k.split(".", 1)[1]: v for k, v in ws["state_dict"].items()}
 
     # load weights
-    mis, une = model.load_state_dict(ws, strict=False)
+    mis, unk = model.load_state_dict(ws, strict=False)
     if mis:
         print(f"Warning: Missing keys: {mis}.")
-    if une:
-        print(f"Warning: Unexpected keys: {une}.")
+    if unk:
+        print(f"Warning: Unexpected keys: {unk}.")
 
-    if mode == "eval":
+    if do_eval:
         model.eval()
     return model

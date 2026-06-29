@@ -284,7 +284,8 @@ class SmilesEditor:
 
     def corrupt(
         self,
-        smi: str, n: int = 1,
+        smi: str,
+        n: int = 1,
         error: Literal['all'] | ErrorType | list[ErrorType] = 'all'
     ) -> list[dict[str, str | int]]:
         if error == "all":

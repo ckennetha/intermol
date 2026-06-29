@@ -12,11 +12,11 @@ _RX_TOKEN = re.compile(
 _RX_ATOM = re.compile(r'[a-zA-Z\*]') # loose atom check
 _RX_BOND = re.compile(r'[\-=#\$\\\/]')
 _RX_RING = re.compile(r'(\%[0-9]{2}|[0-9])')
+_RX_BRANCH = re.compile(r'[\(\)]')
 
 BOND_SYMBOL = {
-    "SINGLE": "-", "DOUBLE": "=", "TRIPLE": "#", "AROMATIC": ":"
+    "SINGLE": "", "DOUBLE": "=", "TRIPLE": "#", "AROMATIC": ":"
 }
-
 
 # core funcs
 ## atom-in-substructure
@@ -126,7 +126,7 @@ class BatchLabelFromSmarts():
             fcs = RunFilterCatalog(self.catalog, smiles, n_threads)
             descs = [[e.GetDescription() for e in fc] for fc in fcs]
         else:
-            descs = list(self.sma_map.keys())
+            descs = [list(self.sma_map.keys())] * len(smiles)
 
         # label
         n_smiles = len(smiles)

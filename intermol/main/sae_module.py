@@ -14,9 +14,11 @@ from intermol.main.utils import load_model_from_HF
 class SAEModule(ptl.LightningModule):
     def __init__(
         self,
-        hidden_dim: int, k: int,
-        model_hook_pos: int,
-        lr: float, wd: float,
+        layer: int, # model hook position
+        hidden_dim: int,
+        k: int,
+        opt_lr: float,
+        opt_wd: float,
         model_name: str = 'ibm/MoLFormer-XL-both-10pct',
         model_dim: int = 768,
         batch_size: int = 128,
@@ -28,30 +30,31 @@ class SAEModule(ptl.LightningModule):
         # load models
         self.tokenizer, self.base_model = load_model_from_HF(model_name)
         self.sae = SparseAutoencoder(
-            hidden_dim, k,
+            hidden_dim,
+            k,
             model_dim,
             batch_size,
             dead_steps_threshold
         )
 
-        self.lr = lr
-        self.wd = wd
-        self.model_hook_pos = model_hook_pos
+        self.lr = opt_lr
+        self.wd = opt_wd
+        self.layer = layer
 
-        self.val_res = []
+        self.val_results = []
 
     def forward(self, X):
         return self.sae(X)
 
     def training_step(self, batch, batch_idx):
-        mols = self.tokenizer(
-            batch['smi'], padding=True, return_tensors='pt'
-        ).to(self.device)
+        mols = batch['smi']
         bsz = len(mols)
 
-        _, _, acts = self._base_encode(mols, self.model_hook_pos)
-        recons, aux_k, num_dead = self(acts)
-        mse_loss, aux_k_loss = loss_fn(acts, recons, aux_k)
+        encs = self.tokenizer(mols, padding=True, return_tensors='pt').to(self.device)
+        _, _, base_acts = self._base_encode(encs, self.layer)
+
+        recons, aux_k, num_dead = self(base_acts)
+        mse_loss, aux_k_loss = loss_fn(base_acts, recons, aux_k)
         loss = mse_loss + aux_k_loss
 
         self.log(
@@ -84,26 +87,23 @@ class SAEModule(ptl.LightningModule):
         diff_ces = torch.zeros(bsz, device=self.device)
         mse_losses = torch.zeros(bsz, device=self.device)
         for i, mol in enumerate(mols):
-            mol_enc = self.tokenizer(mol, return_tensors='pt').to(self.device)
-            tokens, ori_logits, acts = self._base_encode(
-                mol_enc, self.model_hook_pos
-            )
+            enc = self.tokenizer(mol, return_tensors='pt').to(self.device)
+            tokens, ori_logits, base_acts = self._base_encode(enc, self.layer)
 
-            recons = self.sae.forward_val(acts)
-            mse_loss, _ = loss_fn(acts, recons, None)
+            recons = self.sae.forward_val(base_acts)
+            mse_loss, _ = loss_fn(base_acts, recons, None)
             mse_losses[i] = mse_loss
 
-            recons_logits = self._base_modify(mol_enc, recons, self.model_hook_pos)
+            recons_logits = self._base_modify(enc, recons, self.layer)
             diff_ce = delta_ce(ori_logits, recons_logits, tokens)
             diff_ces[i] = diff_ce
 
-        val_r = {
+        val_result = {
             'mse_loss': mse_losses.mean(),
             'diff_ce': diff_ces.mean()
         }
-        self.val_res.append(val_r)
-
-        return val_r
+        self.val_results.append(val_result)
+        return val_result
 
     def on_validation_epoch_end(self):
         avg_mse_loss = torch.stack([r["mse_loss"] for r in self.val_results]).mean()
@@ -118,6 +118,8 @@ class SAEModule(ptl.LightningModule):
             prog_bar=True,
             logger=True
         )
+
+        self.val_results.clear()
 
     def test_step(self, batch, batch_idx):
         return self.validation_step(batch, batch_idx)
@@ -138,13 +140,11 @@ class SAEModule(ptl.LightningModule):
         return enc['input_ids'], outs.logits, acts
 
     @torch.no_grad()
-    def _base_modify(self, enc, acts, layer_idx: int):
+    def _base_modify(self, enc, acts, layer):
         def hook_fn(module, input, output):
             return acts
 
-        target_layer = (
-            self.base_model.molformer.encoder.layer[self.layer_idx - 1].output
-        )
+        target_layer = self.base_model.molformer.encoder.layer[layer - 1].output
         hook = target_layer.register_forward_hook(hook_fn)
 
         outs = self.base_model(**enc)
