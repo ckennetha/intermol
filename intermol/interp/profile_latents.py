@@ -82,16 +82,17 @@ def get_latent_nonzero_density(acts_h5_path: str) -> pl.DataFrame:
 def get_latent_token_preference(
     acts_h5_path: str,
     data_path: str,
+    model_name: str,
+    use_molformer: bool = False, # if True, skip group-wise dominance
     inverse: bool = False, # if True, count non-activated tokens
     gtc_pth: Optional[str] = None, # JSON file path for dataset total token count
-    model_name: str = 'ibm/MoLFormer-XL-both-10pct'
 ) -> pl.DataFrame:
     # parse dataset
     with open(data_path, 'r') as h:
         smiles = [smi.rstrip("\n") for smi in h.readlines()]
 
     # init tokenizer
-    tokenizer = load_model_from_HF(model_name, tokenizer_only=True)
+    tokenizer = load_model_from_HF(model_name, use_molformer, tokenizer_only=True)
 
     with h5py.File(acts_h5_path, 'r') as h5f:
         chunks = h5_chunk_sorter(list(h5f.keys()))
@@ -178,35 +179,12 @@ def get_latent_token_preference(
 
         _, _, U, D = measure_ic(prop)
 
-        # group-level
-        ctr_grp = {}
-        for tk, tk_cnt in zip(nz_tks, nz_cs):
-            if _RX_ATOM.search(tk):
-                grp = "Atom"
-            elif _RX_BRANCH.fullmatch(tk):
-                grp = "Branch"
-            elif _RX_RING.fullmatch(tk):
-                grp = "Ring"
-            elif _RX_BOND.fullmatch(tk):
-                grp = "Bond"
-            else:
-                grp = "Disconnection"
-            ctr_grp[grp] = ctr_grp.get(grp, 0) + tk_cnt
-        ctr_grp = dict(sorted(
-            ctr_grp.items(), key=lambda x: x[1], reverse=True
-        ))
-
-        grp_total = sum(ctr_grp.values())
-        grp_prop = [grp_cnt / grp_total for grp_cnt in ctr_grp.values()]
-
-        _, _, gU, gD = measure_ic(grp_prop)
-
         # gtc
         gtc_ratios = None
         if gtc_pth is not None:
             gtc_ratios = [tk_cnt / gtc[tk] for tk, tk_cnt in zip(nz_tks, nz_cs)]
 
-        measures.append({
+        m = {
             "feature": f,
             "n_Mol": ctr_mol[f],
             "token": nz_tks,
@@ -214,11 +192,38 @@ def get_latent_token_preference(
             "token_Global_Ratio": gtc_ratios,
             "token_Simpson_D": D,
             "token_Pielou_E_r": U,
-            "group": list(ctr_grp.keys()),
-            "group_Count": list(ctr_grp.values()),
-            "group_Simpson_D": gD,
-            "group_Pielou_E_r": gU
-        })
+        }
+
+        # group-level
+        if not use_molformer:
+            ctr_grp = {}
+            for tk, tk_cnt in zip(nz_tks, nz_cs):
+                if _RX_ATOM.search(tk):
+                    grp = "Atom"
+                elif _RX_BRANCH.fullmatch(tk):
+                    grp = "Branch"
+                elif _RX_RING.fullmatch(tk):
+                    grp = "Ring"
+                elif _RX_BOND.fullmatch(tk):
+                    grp = "Bond"
+                else:
+                    grp = "Disconnection"
+                ctr_grp[grp] = ctr_grp.get(grp, 0) + tk_cnt
+            ctr_grp = dict(sorted(
+                ctr_grp.items(), key=lambda x: x[1], reverse=True
+            ))
+
+            grp_total = sum(ctr_grp.values())
+            grp_prop = [grp_cnt / grp_total for grp_cnt in ctr_grp.values()]
+
+            _, _, gU, gD = measure_ic(grp_prop)
+
+            m['group'] = list(ctr_grp.keys())
+            m['group_Count'] = list(ctr_grp.values())
+            m['group_Simpson_D'] = gD
+            m['group_Pielou_E_r'] = gU
+
+        measures.append(m)
 
     return pl.DataFrame(measures)
 

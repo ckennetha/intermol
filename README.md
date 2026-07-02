@@ -1,5 +1,5 @@
 # InterMol
-InterMol is an open-source mechanistic interpretability toolbox that leverages sparse autoencoders (SAEs) to interpret chemical language models (cLMs). By default, InterMol uses [MolFormer-XL](https://huggingface.co/ibm-research/MoLFormer-XL-both-10pct) as its underlying cLM. Our interactive visualizer of the discovered features is available at [intermol.co](https://www.intermol.co/#/).
+InterMol is an open-source mechanistic interpretability toolbox that leverages sparse autoencoders (SAEs) to interpret chemical language models (cLMs). By default, InterMol uses [MoLFormer-XL](https://huggingface.co/ibm-research/MoLFormer-XL-both-10pct) as its underlying cLM. Our interactive visualizer of the discovered features is available at [intermol.co](https://www.intermol.co/#/).
 
 Learn more about the implementation details and findings by reading our [preprint]().
 
@@ -32,23 +32,26 @@ pip install -e .
 ```
 
 ### Pretrained SAEs
-We provide SAE weights trained on top of the open-source version of MolFormer-XL at layers 1, 3, 6, 9, and 12. MolFormer-XL weights are fetched on-the-fly from HuggingFace, while SAE weights must be downloaded separately. To extract SAE activations using a pretrained model:
+We provide SAE weights trained on top of the open-source version of MoLFormer-XL at layers 1, 3, 6, 9, and 12. MoLFormer-XL weights are fetched on-the-fly from HuggingFace, while SAE weights must be downloaded separately. To extract SAE activations using a pretrained model:
 
 ```python
 from intermol.main.inference import SAEInferenceConfig, SAEWithBaseModel
 
+MODEL_NAME = "ibm/MoLFormer-XL-both-10pct"
+USE_MOLFORMER = True # MoLFormer requires different HF setting
+
 SMILES = "c1ccccc1"
 
 config = SAEInferenceConfig(
-    layer=1 # MolFormer-XL layer
+    layer=1 # MoLFormer-XL layer
     hidden_dim=3072,
     k=128,
     weights_path="norm-MOL-1-3072-128.pt", # normalized SAE weights
 )
-sae = SAEWithBaseModel(config)
+sae = SAEWithBaseModel(config, MODEL_NAME, USE_MOLFORMER)
 
 mf_acts, sae_acts = sae.encode(SMILES)
-# mf_acts: MolFormer-XL hidden states, sae_acts: SAE activations
+# mf_acts: MoLFormer-XL hidden states, sae_acts: SAE activations
 ```
 
 ### Bulk Activation Extraction
@@ -59,25 +62,26 @@ usage: run-precomp-acts [-h] --data-path DATA_PATH
                         --layer LAYER --hidden-dim HIDDEN_DIM --k K
                         --sae-ckpt-path SAE_CKPT_PATH
                         [--chunk-size CHUNK_SIZE] [--outdir-path OUTDIR_PATH]
-                        [--out-prefix OUT_PREFIX] [--device {auto,cpu,cuda}]
-                        [--model-name MODEL_NAME]
+                        [--out-prefix OUT_PREFIX] [--model-name MODEL_NAME]
+                        [--use-molformer] [--device {auto,cpu,cuda}]
 
 options:
-    -h, --help                    show this help message and exit
-    --data-path DATA_PATH         Path to .txt or one-column .smi file
-    --hidden-dim HIDDEN_DIM       SAE latent dimension
-    --k K                         Number of top-k SAE latents
-    --sae-ckpt-path SAE_CKPT_PATH Path to trained SAE checkpoint
-    --layer LAYER                 MolFormer-XL layer
-    --chunk-size CHUNK_SIZE       Number of samples per chunk. Default: 8192
-    --outdir-path OUTDIR_PATH     Output directory. Default: current directory
-    --out-prefix OUT_PREFIX       Output filename prefix. Default: current timestamp
-    --device {auto,cpu,cuda}      Inference device. Default: auto
-    --model-name MODEL_NAME       Hugging Face model name. Default: ibm/MoLFormer-XL-both-10pct
+    -h, --help                    show this help message and exit.
+    --data-path DATA_PATH         Path to .txt or one-column .smi file.
+    --hidden-dim HIDDEN_DIM       SAE latent dimension.
+    --k K                         Number of top-k SAE latents.
+    --sae-ckpt-path SAE_CKPT_PATH Path to trained SAE checkpoint.
+    --layer LAYER                 Base model layer.
+    --chunk-size CHUNK_SIZE       Number of samples per chunk. Default: 8192.
+    --outdir-path OUTDIR_PATH     Output directory. Default: current directory.
+    --out-prefix OUT_PREFIX       Output filename prefix. Default: current timestamp.
+    --model-name MODEL_NAME       Hugging Face model name.
+    --use-molformer               Enable MoLFormer-specific setting.
+    --device {auto,cpu,cuda}      Inference device. Default: auto.
 ```
 
 ### Concept Evaluation
-For evaluating association between specific SAE latents and atom-level molecular concepts, we use a two-step approach: first filtering latents by standardized mean difference (SMD) using the `--is-prefilter` flag, then concept presence classification with binarized activations, evaluated by F1 score. We provide `run-eval-concepts` with Numba-accelerated computation:
+For evaluating association between specific SAE latents and atom-level molecular concepts, we use a two-step approach: first filtering latents by standardized mean difference (SMD) using the `--is-prefilter` flag, then concept presence classification with binarized activations, evaluated by F1 score. Currently, this method only supports SAEs trained on MoLFormer, as MoLFormer uses atom-wise tokenization. We provide `run-eval-concepts` with Numba-accelerated computation:
 
 ```
 usage: run-eval-concepts [-h] --data-path DATA_PATH --acts-h5-path ACTS_H5_PATH

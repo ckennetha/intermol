@@ -75,13 +75,23 @@ class SAEWithBaseModel(SAEInferenceModule):
     def __init__(
         self,
         config: SAEInferenceConfig | list[SAEInferenceConfig],
-        device_name: str = 'auto',
-        model_name: str = 'ibm/MoLFormer-XL-both-10pct'
+        model_name: str,
+        use_molformer: bool = False,
+        device_name: str = 'auto'
     ):
         super().__init__(config, device_name)
 
-        self.tokenizer, self.base_model = load_model_from_HF(model_name)
+        self.tokenizer, self.base_model = load_model_from_HF(model_name, use_molformer)
         self.base_model.to(self.device)
+
+        # auto-locate encoder layers
+        self._encoder_layers = self._resolve_encoder_layers()
+
+    def _resolve_encoder_layers(self):
+        for child in self.base_model.children():
+            if hasattr(child, 'encoder') and hasattr(child.encoder, 'layer'):
+                return child.encoder.layer
+        raise ValueError("Could not auto-detect encoder layers.")
 
     def tokenize(self, smi: str) -> list[str]:
         return self.tokenizer.tokenize(smi)

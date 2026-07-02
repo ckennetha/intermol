@@ -33,8 +33,10 @@ def normalize_sae(
     hidden_dim: int,
     k: int,
     weights_path: str,
+    model_name: str,
+    use_molformer: bool = False,
+    model_dim: int = 768,
     chunk_size: int = 1024,
-    model_name: str = 'ibm/MoLFormer-XL-both-10pct',
     outdir_path: str = ".",
     device_name: str = "auto"
 ) -> None:
@@ -46,12 +48,12 @@ def normalize_sae(
 
     # models
     print("Loading base model...")
-    tokenizer, base_model = load_model_from_HF(model_name)
+    tokenizer, base_model = load_model_from_HF(model_name, use_molformer)
     base_model.to(device)
 
     print("Loading SAE model...")
-    sae = SparseAutoencoder(hidden_dim, k)
-    sae = load_model_from_file(sae, weights_path)
+    sae = SparseAutoencoder(hidden_dim, k, model_dim)
+    sae = load_model_from_file(sae, weights_path, from_lightning=True)
     sae.to(device)
 
     # outdir_pth
@@ -134,6 +136,11 @@ def normalize_sae(
     help="Hugging Face model name"
 )
 @click.option(
+    "--use-molformer", is_flag=True, default=False,
+    help="Enable MoLFormer-specific setting"
+)
+@click.option("--model-dim", type=int, default=768, help="Base model hidden dimension")
+@click.option(
     "--outdir-path", type=click.Path(file_okay=False), default='.',
     help='Output directory'
 )
@@ -152,8 +159,10 @@ def main(**cli_kwargs):
         cli_kwargs["hidden_dim"],
         cli_kwargs["k"],
         cli_kwargs["sae_ckpt_path"],
-        cli_kwargs["chunk_size"],
         cli_kwargs["model_name"],
+        cli_kwargs["use_molformer"],
+        cli_kwargs["model_dim"],
+        cli_kwargs["chunk_size"],
         cli_kwargs["outdir_path"],
         cli_kwargs["device"]
     )

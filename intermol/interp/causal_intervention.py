@@ -70,7 +70,7 @@ class LatentAblationModule(SAEWithBaseModel):
         hooks = []
 
         for cfg in configs:
-            target = self.base_model.molformer.encoder.layer[cfg.layer - 1].output
+            target = self._encoder_layers[cfg.layer - 1].output
             hooks.append(target.register_forward_hook(self._make_hook(cfg, mod_sae)))
 
         try:

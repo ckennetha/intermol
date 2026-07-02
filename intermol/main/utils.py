@@ -3,7 +3,9 @@ from transformers import AutoTokenizer, AutoModelForMaskedLM
 
 # load model from HuggingFace
 def load_model_from_HF(
-    model_name: str, tokenizer_only: bool=False
+    model_name: str,
+    use_molformer: bool = False,
+    tokenizer_only: bool = False
 ) -> AutoTokenizer | tuple[AutoTokenizer, AutoModelForMaskedLM]:
     # load tokenizer
     tokenizer = AutoTokenizer.from_pretrained(
@@ -14,9 +16,8 @@ def load_model_from_HF(
 
     # load model (eval-only)
     model = AutoModelForMaskedLM.from_pretrained(
-        model_name,
-        deterministic_eval=True,
-        trust_remote_code=True
+        model_name, trust_remote_code=True,
+        **({"deterministic_eval": True} if use_molformer else {})
     )
     for param in model.parameters():
         param.requires_grad = False

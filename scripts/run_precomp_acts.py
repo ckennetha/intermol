@@ -118,12 +118,15 @@ def precomp_acts(
     help='Output file prefix. Default: current timestamp (e.g. 202503101430).'
 )
 @click.option(
-    "--device", type=click.Choice(['auto', 'cpu', 'cuda']), default='auto',
-    help='Inference device. Default: auto.'
+    "--model-name", type=str, required=True, help="Hugging Face model name"
 )
 @click.option(
-    "--model-name", type=str, default='ibm/MoLFormer-XL-both-10pct',
-    help="Hugging Face model name"
+    "--use-molformer", is_flag=True, default=False,
+    help="Enable MoLFormer-specific setting"
+)
+@click.option(
+    "--device", type=click.Choice(['auto', 'cpu', 'cuda']), default='auto',
+    help='Inference device. Default: auto.'
 )
 def main(**cli_kwargs):
     # parse dataset
@@ -140,7 +143,10 @@ def main(**cli_kwargs):
         cli_kwargs['sae_ckpt_path']
     )
     sae_module = SAEWithBaseModel(
-        sae_config, cli_kwargs['device'], cli_kwargs['model_name']
+        sae_config,
+        cli_kwargs['model_name'],
+        cli_kwargs['use_molformer'],
+        cli_kwargs['device']
     )
 
     # run `precomp_acts`

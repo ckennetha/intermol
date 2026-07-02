@@ -22,12 +22,14 @@ class Config:
     layer: int
     hidden_dim: int
     k: int
-    model_name: str = 'ibm/MoLFormer-XL-both-10pct'
+    model_name: str
+    use_molformer: bool = False
     model_dim: int = 768
     batch_size: int = 128
     train_size: float = 0.8
     dead_steps_threshold: int = 5000
     ckpt_path: str = None
+    outdir_path: str = "."
     num_epochs: int = 1
     opt_lr: float = 2e-4
     opt_wd: float = 1e-2
@@ -95,6 +97,10 @@ def build_config(config, **cli_kwargs) -> Config:
     "--model-name", type=str, default='ibm/MoLFormer-XL-both-10pct',
     help="Hugging Face model name"
 )
+@click.option(
+    "--use-molformer", is_flag=True, default=False,
+    help="Enable MoLFormer-specific setting"
+)
 @click.option("--model-dim", type=int, default=768, help="Base model hidden dimension")
 @click.option(
     "--dead-steps-threshold", type=int, default=None,
@@ -103,6 +109,10 @@ def build_config(config, **cli_kwargs) -> Config:
 @click.option(
     "--ckpt-path", type=str, default=None,
     help="Path to a trained model checkpoint used to resume training"
+)
+@click.option(
+    "--outdir-path", type=str, default=None,
+    help="Path to a directory to save the model"
 )
 
 # cfg: run
@@ -118,9 +128,9 @@ def main(config, **cli_kwargs):
     ptl.seed_everything(cfg.seed)
 
     # output
-    output_dir = Path(
-        f"../results_layer{cfg.layer}_dim{cfg.hidden_dim}_k{cfg.k}_{cfg.seed}"
-    )
+    outdir_path = Path(cfg.outdir_path)
+    outdir_name = f"result-{cfg.layer}-{cfg.hidden_dim}-{cfg.k}-{cfg.seed}"
+    output_dir = outdir_path / outdir_name
     output_dir.mkdir(exist_ok=True)
 
     # logger
@@ -151,6 +161,7 @@ def main(config, **cli_kwargs):
         cfg.opt_lr,
         cfg.opt_wd,
         cfg.model_name,
+        cfg.use_molformer,
         cfg.model_dim,
         cfg.batch_size,
         cfg.dead_steps_threshold

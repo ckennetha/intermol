@@ -19,7 +19,8 @@ class SAEModule(ptl.LightningModule):
         k: int,
         opt_lr: float,
         opt_wd: float,
-        model_name: str = 'ibm/MoLFormer-XL-both-10pct',
+        model_name: str,
+        use_molformer: bool = False,
         model_dim: int = 768,
         batch_size: int = 128,
         dead_steps_threshold: int = 5000
@@ -28,7 +29,7 @@ class SAEModule(ptl.LightningModule):
         self.save_hyperparameters()
 
         # load models
-        self.tokenizer, self.base_model = load_model_from_HF(model_name)
+        self.tokenizer, self.base_model = load_model_from_HF(model_name, use_molformer)
         self.sae = SparseAutoencoder(
             hidden_dim,
             k,
@@ -41,7 +42,15 @@ class SAEModule(ptl.LightningModule):
         self.wd = opt_wd
         self.layer = layer
 
+        self._encoder_layers = self._resolve_encoder_layers()
+
         self.val_results = []
+
+    def _resolve_encoder_layers(self):
+        for child in self.base_model.children():
+            if hasattr(child, 'encoder') and hasattr(child.encoder, 'layer'):
+                return child.encoder.layer
+        raise ValueError("Could not auto-detect encoder layers.")
 
     def forward(self, X):
         return self.sae(X)
@@ -144,7 +153,7 @@ class SAEModule(ptl.LightningModule):
         def hook_fn(module, input, output):
             return acts
 
-        target_layer = self.base_model.molformer.encoder.layer[layer - 1].output
+        target_layer = self._encoder_layers[layer - 1].output
         hook = target_layer.register_forward_hook(hook_fn)
 
         outs = self.base_model(**enc)
