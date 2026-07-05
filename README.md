@@ -1,7 +1,7 @@
 # InterMol
 InterMol is an open-source mechanistic interpretability toolbox that leverages sparse autoencoders (SAEs) to interpret chemical language models (cLMs). By default, InterMol uses [MoLFormer-XL](https://huggingface.co/ibm-research/MoLFormer-XL-both-10pct) as its underlying cLM. Our interactive visualizer of the discovered features is available at [intermol.co](https://www.intermol.co/#/).
 
-Learn more about the implementation details and findings by reading our [preprint]().
+Learn more about the implementation details and findings by reading our [preprint](https://doi.org/10.48550/arXiv.2606.23443).
 
 ## Project Structure
 ```
@@ -55,25 +55,26 @@ mf_acts, sae_acts = sae.encode(SMILES)
 ```
 
 ### Bulk Activation Extraction
-To extract SAE activations in bulk, we provide a command line interface (`run-precomp-acts`) that efficiently stores the results as decomposed CSC sparse matrix format using `h5py`:
+To extract SAE activations in bulk, we provide a command line interface (`run-precomp-acts`) that efficiently stores the results as decomposed CSC sparse matrix format using `h5py`. Multiple SAE configs can be processed in a single run by repeating per-SAE arguments:
 
 ```
 usage: run-precomp-acts [-h] --data-path DATA_PATH
                         --layer LAYER --hidden-dim HIDDEN_DIM --k K
                         --sae-ckpt-path SAE_CKPT_PATH
-                        [--chunk-size CHUNK_SIZE] [--outdir-path OUTDIR_PATH]
-                        [--out-prefix OUT_PREFIX] [--model-name MODEL_NAME]
-                        [--use-molformer] [--device {auto,cpu,cuda}]
+                        [--outdir-path OUTDIR_PATH]
+                        [--chunk-size CHUNK_SIZE] [--out-prefix OUT_PREFIX]
+                        [--model-name MODEL_NAME] [--use-molformer]
+                        [--device {auto,cpu,cuda}]
 
 options:
     -h, --help                    show this help message and exit.
     --data-path DATA_PATH         Path to .txt or one-column .smi file.
-    --hidden-dim HIDDEN_DIM       SAE latent dimension.
-    --k K                         Number of top-k SAE latents.
-    --sae-ckpt-path SAE_CKPT_PATH Path to trained SAE checkpoint.
-    --layer LAYER                 Base model layer.
+    --layer LAYER                 Base model layer (repeat per SAE).
+    --hidden-dim HIDDEN_DIM       SAE latent dimension (repeat per SAE).
+    --k K                         Number of top-k SAE latents (repeat per SAE).
+    --sae-ckpt-path SAE_CKPT_PATH Path to trained SAE checkpoint (repeat per SAE).
+    --outdir-path OUTDIR_PATH     Output directory (repeat per SAE). Default: current directory.
     --chunk-size CHUNK_SIZE       Number of samples per chunk. Default: 8192.
-    --outdir-path OUTDIR_PATH     Output directory. Default: current directory.
     --out-prefix OUT_PREFIX       Output filename prefix. Default: current timestamp.
     --model-name MODEL_NAME       Hugging Face model name.
     --use-molformer               Enable MoLFormer-specific setting.

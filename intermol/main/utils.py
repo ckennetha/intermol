@@ -1,3 +1,4 @@
+import warnings
 import torch
 from transformers import AutoTokenizer, AutoModelForMaskedLM
 
@@ -7,6 +8,13 @@ def load_model_from_HF(
     use_molformer: bool = False,
     tokenizer_only: bool = False
 ) -> AutoTokenizer | tuple[AutoTokenizer, AutoModelForMaskedLM]:
+    if not use_molformer:
+        warnings.warn(
+            f"use_molformer is set to {use_molformer}. "
+            "This is NOT expected behavior if you are using MoLFormer, "
+            "as the output may be inconsistent across forward passes."
+        )
+
     # load tokenizer
     tokenizer = AutoTokenizer.from_pretrained(
         model_name, trust_remote_code=True

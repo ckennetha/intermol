@@ -41,7 +41,7 @@ class SAEInferenceModule():
 
         self.sae: dict[str, SparseAutoencoder] = {}
         for cfg in config:
-            sae = SparseAutoencoder(hidden_dim=cfg.hidden_dim, k=cfg.k)
+            sae = self._build_sae(cfg)
             sae = load_model_from_file(sae, cfg.weights_path)
             sae.to(self.device)
             self.sae[cfg.key] = sae
@@ -55,6 +55,9 @@ class SAEInferenceModule():
                 )
             return self._default_key
         return key
+
+    def _build_sae(self, cfg: SAEInferenceConfig) -> SparseAutoencoder:
+        return SparseAutoencoder(hidden_dim=cfg.hidden_dim, k=cfg.k)
 
     def _get_sae(self, key: str) -> SparseAutoencoder:
         if key not in self.sae:
@@ -79,9 +82,9 @@ class SAEWithBaseModel(SAEInferenceModule):
         use_molformer: bool = False,
         device_name: str = 'auto'
     ):
-        super().__init__(config, device_name)
-
         self.tokenizer, self.base_model = load_model_from_HF(model_name, use_molformer)
+
+        super().__init__(config, device_name)
         self.base_model.to(self.device)
 
         # auto-locate encoder layers
@@ -92,6 +95,13 @@ class SAEWithBaseModel(SAEInferenceModule):
             if hasattr(child, 'encoder') and hasattr(child.encoder, 'layer'):
                 return child.encoder.layer
         raise ValueError("Could not auto-detect encoder layers.")
+
+    def _build_sae(self, cfg: SAEInferenceConfig) -> SparseAutoencoder:
+        return SparseAutoencoder(
+            hidden_dim=cfg.hidden_dim,
+            k=cfg.k,
+            model_dim=self.base_model.config.hidden_size
+        )
 
     def tokenize(self, smi: str) -> list[str]:
         return self.tokenizer.tokenize(smi)
