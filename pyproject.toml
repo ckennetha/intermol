@@ -1,6 +1,6 @@
 [project]
 name = "intermol"
-version = "0.1.0"
+version = "1.0.0"
 description = "A mechanistic interpretability toolbox for chemical language models"
 authors = [{ name = "Christian Kenneth", email = "kennethasikinnn@gmail.com" }]
 dependencies = [
@@ -14,7 +14,7 @@ dependencies = [
   "scipy",
   "torch>=2.2",
   "tqdm",
-  "transformers<5"
+  "transformers"
 ]
 requires-python = ">=3.9"
 

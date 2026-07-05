@@ -4,67 +4,90 @@
 #
 #    pip-compile --output-file=requirements.txt pyproject.toml
 #
-aiohappyeyeballs==2.6.1
+aiohappyeyeballs==2.7.1
     # via aiohttp
-aiohttp==3.12.15
+aiohttp==3.14.1
     # via fsspec
 aiosignal==1.4.0
     # via aiohttp
+annotated-doc==0.0.4
+    # via typer
+anyio==4.14.1
+    # via httpx
 async-timeout==5.0.1
     # via aiohttp
-attrs==25.3.0
+attrs==26.1.0
     # via aiohttp
-certifi==2025.8.3
-    # via requests
-charset-normalizer==3.4.3
-    # via requests
+certifi==2026.6.17
+    # via
+    #   httpcore
+    #   httpx
+click==8.4.2
+    # via huggingface-hub
 colorama==0.4.6
-    # via tqdm
-filelock==3.19.1
+    # via
+    #   click
+    #   tqdm
+    #   typer
+exceptiongroup==1.3.1
+    # via anyio
+filelock==3.29.5
     # via
     #   huggingface-hub
     #   torch
-    #   transformers
-frozenlist==1.7.0
+frozenlist==1.8.0
     # via
     #   aiohttp
     #   aiosignal
-fsspec[http]==2025.7.0
+fsspec[http]==2026.6.0
     # via
     #   huggingface-hub
     #   pytorch-lightning
     #   torch
-h5py==3.14.0
+h11==0.16.0
+    # via httpcore
+h5py==3.16.0
     # via intermol (pyproject.toml)
-huggingface-hub==0.34.4
+hf-xet==1.5.1
+    # via huggingface-hub
+httpcore==1.0.9
+    # via httpx
+httpx==0.28.1
+    # via huggingface-hub
+huggingface-hub==1.22.0
     # via
     #   tokenizers
     #   transformers
-idna==3.10
+idna==3.18
     # via
-    #   requests
+    #   anyio
+    #   httpx
     #   yarl
 jinja2==3.1.6
     # via torch
 joblib==1.5.3
     # via scikit-learn
-lightning-utilities==0.15.2
+lightning-utilities==0.15.3
     # via
     #   pytorch-lightning
     #   torchmetrics
-llvmlite==0.46.0
+llvmlite==0.48.0
     # via numba
-markupsafe==3.0.2
+markdown-it-py==4.2.0
+    # via rich
+markupsafe==3.0.3
     # via jinja2
+mdurl==0.1.2
+    # via markdown-it-py
 mpmath==1.3.0
     # via sympy
-multidict==6.6.4
+multidict==6.7.1
     # via
     #   aiohttp
     #   yarl
 networkx==3.4.2
     # via torch
-numba==0.64.0
+numba==0.66.0
     # via intermol (pyproject.toml)
 numpy==2.2.6
     # via
@@ -76,37 +99,39 @@ numpy==2.2.6
     #   scipy
     #   torchmetrics
     #   transformers
-packaging==25.0
+packaging==26.2
     # via
     #   huggingface-hub
     #   lightning-utilities
     #   pytorch-lightning
     #   torchmetrics
     #   transformers
-pillow==11.3.0
+pillow==12.3.0
     # via rdkit
-polars==1.32.3
+polars==1.42.1
     # via intermol (pyproject.toml)
-propcache==0.3.2
+polars-runtime-32==1.42.1
+    # via polars
+propcache==0.5.2
     # via
     #   aiohttp
     #   yarl
-pytorch-lightning==2.5.3
+pygments==2.20.0
+    # via rich
+pytorch-lightning==2.6.5
     # via intermol (pyproject.toml)
-pyyaml==6.0.2
+pyyaml==6.0.3
     # via
     #   huggingface-hub
     #   pytorch-lightning
     #   transformers
-rdkit==2025.3.5
+rdkit==2026.3.3
     # via intermol (pyproject.toml)
-regex==2025.7.34
+regex==2026.6.28
     # via transformers
-requests==2.32.5
-    # via
-    #   huggingface-hub
-    #   transformers
-safetensors==0.6.2
+rich==15.0.0
+    # via typer
+safetensors==0.8.0
     # via transformers
 scikit-learn==1.7.2
     # via intermol (pyproject.toml)
@@ -114,38 +139,43 @@ scipy==1.15.3
     # via
     #   intermol (pyproject.toml)
     #   scikit-learn
+shellingham==1.5.4
+    # via typer
 sympy==1.14.0
     # via torch
 threadpoolctl==3.6.0
     # via scikit-learn
-tokenizers==0.21.4
+tokenizers==0.22.2
     # via transformers
-torch==2.8.0
+torch==2.12.1
     # via
     #   intermol (pyproject.toml)
     #   pytorch-lightning
     #   torchmetrics
-torchmetrics==1.8.1
+torchmetrics==1.9.0
     # via pytorch-lightning
-tqdm==4.67.1
+tqdm==4.68.3
     # via
     #   huggingface-hub
     #   intermol (pyproject.toml)
     #   pytorch-lightning
     #   transformers
-transformers==4.55.4
+transformers==5.13.0
     # via intermol (pyproject.toml)
-typing-extensions==4.14.1
+typer==0.26.8
+    # via transformers
+typing-extensions==4.16.0
     # via
+    #   aiohttp
     #   aiosignal
+    #   anyio
+    #   exceptiongroup
     #   huggingface-hub
     #   lightning-utilities
     #   multidict
     #   pytorch-lightning
     #   torch
-urllib3==2.5.0
-    # via requests
-yarl==1.20.1
+yarl==1.24.2
     # via aiohttp
 
 # The following packages are considered to be unsafe in a requirements file:
