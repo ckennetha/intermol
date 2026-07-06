@@ -17,7 +17,8 @@ def load_model_from_HF(
 
     # load tokenizer
     tokenizer = AutoTokenizer.from_pretrained(
-        model_name, trust_remote_code=True
+        model_name, trust_remote_code=True,
+        **({"revision": "compat-v4"} if use_molformer else {})
     )
     if tokenizer_only:
         return tokenizer
@@ -25,7 +26,10 @@ def load_model_from_HF(
     # load model (eval-only)
     model = AutoModelForMaskedLM.from_pretrained(
         model_name, trust_remote_code=True,
-        **({"deterministic_eval": True} if use_molformer else {})
+        **(
+            {"deterministic_eval": True, "revision": "compat-v4"}
+            if use_molformer else {}
+        )
     )
     for param in model.parameters():
         param.requires_grad = False

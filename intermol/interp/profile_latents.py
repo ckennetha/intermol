@@ -59,6 +59,20 @@ def get_latent_nonzero_density(acts_h5_path: str) -> pl.DataFrame:
             for f in tqdm(range(n_features), desc="Generating density statistics..."):
                 col = d_arr[:, f]
                 nz_col = col[np.flatnonzero(col)]
+                if len(nz_col) == 0:
+                    d_stats.append({
+                        "feature": f,
+                        "n": 0,
+                        "min": None,
+                        "q1": None,
+                        "median": None,
+                        "q3": None,
+                        "max": None,
+                        "mean": None,
+                        "std": None
+                    })
+                    continue
+
                 d_stats.append({
                     "feature": f,
                     "n": len(nz_col),
@@ -155,7 +169,7 @@ def get_latent_token_preference(
     ## func util
     def measure_ic(prop: list[float]):
         H, H_max = -sum(p * math.log(p) for p in prop), math.log(len(prop))
-        U = 1 - (H / H_max)
+        U = 0.0 if H_max == 0.0 else 1 - (H / H_max)
         D = sum(p ** 2 for p in prop)
         return H, H_max, U, D
 
@@ -165,6 +179,25 @@ def get_latent_token_preference(
         tk_ids_f = ctr_tk[f, :]
 
         nz_tk_ids = np.nonzero(tk_ids_f)[0]
+        if len(nz_tk_ids) == 0:
+            measures.append({
+                "feature": f,
+                "n_Mol": 0,
+                "token": [],
+                "token_Count": [],
+                "token_Global_Ratio": None,
+                "token_Simpson_D": None,
+                "token_Pielou_E_r": None,
+                **({
+                    "group": [],
+                    "group_Count": [],
+                    "group_Simpson_D": None,
+                    "group_Pielou_E_r": None
+                } if use_molformer else {}
+                )
+            })
+            continue
+
         nz_tks = tokenizer.convert_ids_to_tokens(nz_tk_ids)
 
         nz_cs = tk_ids_f[nz_tk_ids]
@@ -195,7 +228,7 @@ def get_latent_token_preference(
         }
 
         # group-level
-        if not use_molformer:
+        if use_molformer:
             ctr_grp = {}
             for tk, tk_cnt in zip(nz_tks, nz_cs):
                 if _RX_ATOM.search(tk):

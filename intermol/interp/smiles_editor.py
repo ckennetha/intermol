@@ -46,7 +46,7 @@ class SmilesEditor:
         }
 
     def _error_rings(self, tokens: list[str]) -> tuple[float, list[str]]:
-        ris = list({tk for tk in tokens if _RX_RING.fullmatch(tk)})
+        ris = sorted({tk for tk in tokens if _RX_RING.fullmatch(tk)})
         s = random.random()
         if s < 0.8 and ris:
             ri = random.choice(ris)
@@ -78,7 +78,7 @@ class SmilesEditor:
         else:
             # add ring index
             ri_p1 = len(ris) + 1 # (+1)
-            ris.append(str(ri_p1) if ri_p1 < 10 else f"%{ri}")
+            ris.append(str(ri_p1) if ri_p1 < 10 else f"%{ri_p1}")
             tokens[random.randrange(0, len(tokens))] = random.choice(ris)
         return s, tokens
 
@@ -185,7 +185,7 @@ class SmilesEditor:
             tokens.insert(len(tokens), random.choice(bp_tks))
         elif s < 0.3:
             # duplicate bond token
-            bn_tks = set(bp_tks[:3])
+            bn_tks = bp_tks[:3]
             bn_idxs = [tk_i for tk_i, tk in enumerate(tokens) if tk in bn_tks]
             if bn_idxs:
                 tokens.insert(
@@ -231,7 +231,7 @@ class SmilesEditor:
             except ValueError:
                 ri_idx, near_op = None, None
 
-            if ri_idx:
+            if ri_idx is not None:
                 if (in_s < 0.5) or (near_op is None):
                     # truncate tokens before first ring opening
                     tr_tks = tokens[ri_idx:]
