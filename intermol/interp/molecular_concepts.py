@@ -1,9 +1,11 @@
 import re
 import bisect
 
-from tqdm.auto import tqdm
+from collections import defaultdict
 from rdkit import Chem
 from rdkit.Chem.FilterCatalog import *
+from tqdm.auto import tqdm
+from typing import Optional
 
 # pre-compiled regexes
 _RX_TOKEN = re.compile(
@@ -20,58 +22,81 @@ BOND_SYMBOL = {
 
 # core funcs
 ## atom-in-substructure
-def generate_atom_in_substructure(
-    smi: str,
-    tokens: list[str],
-    atom_idx_to_token_idx_map: dict[int, int]
-) -> list[str]:
-    mol = Chem.MolFromSmiles(smi)
+class AtomInSubstructureSMARTS:
+    def __init__(self, radius: int = 1):
+        self.radius = radius
 
-    out = []
-    for ra_idx, rt_idx in atom_idx_to_token_idx_map.items():
-        bn_idxs = Chem.FindAtomEnvironmentOfRadiusN(mol, 1, ra_idx)
-        nbs = []
-        for bn_idx in bn_idxs:
-            bn = mol.GetBondWithIdx(bn_idx)
-            bn_type = str(bn.GetBondType())
+    def generate(
+        self,
+        smi: str,
+        tokens: list[str],
+        atom_idx_to_token_idx_map: dict[int, int],
+        token_idx_sele: Optional[list[int]] = None
+    ) -> list[str]:
+        mol = Chem.MolFromSmiles(smi)
+        if token_idx_sele is not None:
+            atom_idxs = [
+                ra_idx for ra_idx, rt_idx in atom_idx_to_token_idx_map.items()
+                if rt_idx in token_idx_sele
+            ]
+        else:
+            atom_idxs = list(atom_idx_to_token_idx_map.keys())
 
-            s, e = bn.GetBeginAtomIdx(), bn.GetEndAtomIdx()
-            nb_idx = s if e == ra_idx else e
-            nbs.append(
-                f"{BOND_SYMBOL[bn_type]}{tokens[atom_idx_to_token_idx_map[nb_idx]]}"
-            )
+        out = []
+        for ra_idx in atom_idxs:
+            for rad in range(1, self.radius + 1):
+                bn_idxs = set(Chem.FindAtomEnvironmentOfRadiusN(mol, rad, ra_idx))
 
-        nbs = sorted(nbs)
-        nbs_str = ''.join(
-            f"({nb})" if (i+1) < len(nbs) else nb
-            for i, nb in enumerate(nbs)
+                # build adjacency dict
+                adj = defaultdict(list)
+                for bond in (mol.GetBondWithIdx(i) for i in bn_idxs):
+                    s, e = bond.GetBeginAtomIdx(), bond.GetEndAtomIdx()
+                    sym = BOND_SYMBOL[str(bond.GetBondType())]
+                    adj[s].append((sym, e))
+                    adj[e].append((sym, s))
+
+                sma = self._build_tree(
+                    mol, ra_idx, -1, adj, tokens, atom_idx_to_token_idx_map
+                )
+                out.extend([sma, f"[$({sma})]"])
+
+        return out
+
+    def _build_tree(
+        self,
+        mol: Chem.Mol,
+        root_atom_idx: int,
+        parent_atom_idx: int,
+        adj: dict[int, list[tuple[str, int]]],
+        tokens: list[str],
+        atom_idx_to_token_idx_map: dict[int, int],
+        atom_visit: set = None
+    ) -> str:
+        if atom_visit is None:
+            atom_visit = set()
+        atom_visit.add(root_atom_idx)
+
+        root_atom_str = tokens[atom_idx_to_token_idx_map[root_atom_idx]]
+
+        child_strs = sorted(
+            sym + self._build_tree(
+                mol,
+                nb,
+                root_atom_idx,
+                adj,
+                tokens,
+                atom_idx_to_token_idx_map,
+                atom_visit
+            ) for sym, nb in adj.get(root_atom_idx, [])
+            if (nb != parent_atom_idx) and (nb not in atom_visit)
         )
 
-        sma = tokens[rt_idx] + nbs_str
-        out.append(sma)
-        if len(nbs) > 0:
-            try:
-                submol = Chem.MolFromSmarts(sma)
-                for sa in submol.GetAtoms():
-                    out.append(f"[$({Chem.MolToSmarts(submol, sa.GetIdx())})]")
-            except Exception:
-                out.append(f"[$({sma})]")
-                for i_nb, nb in enumerate(nbs):
-                    nb_bn = nb[0]
-                    if nb_bn in {"=", "#", ":"}:
-                        nb_at = nb[1:]
-                    else:
-                        nb_bn = ""
-                        nb_at = nb
+        nbs_str = ''.join(
+            f"({ch})" if (ch_i + 1) < len(child_strs) else ch
+            for ch_i, ch in enumerate(child_strs)
+        )
+        return root_atom_str + nbs_str
 
-                    nb_nb = nbs[i_nb+1:] + nbs[:i_nb]
-                    nb_nb_str = ''.join(
-                        f"({nbx})" if (i_nbx + 1) < len(nb_nb) else nbx
-                        for i_nbx, nbx in enumerate(nb_nb)
-                    )
-                    out.append(f"[$({nb_at + nb_bn + tokens[rt_idx] + nb_nb_str})]")
-
-    return out
 
 ## label tokens from SMARTS
 class BatchLabelFromSmarts():
