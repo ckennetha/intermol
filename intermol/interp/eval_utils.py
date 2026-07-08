@@ -14,6 +14,16 @@ from scipy.sparse import csc_matrix
 
 from intermol.interp.utils import h5_chunk_sorter
 
+# data helpers (by Claude Opus 4.8)
+## fetch i-th data in generator
+def _peek_sample(state):
+    return state[0]
+
+## move forward to (i+1)-th data in generator
+def _advance_sample(gen, state):
+    state[0] = next(gen, None)
+
+
 # dataclasses
 @dataclass
 class Metrics:
@@ -56,7 +66,8 @@ class ConceptEvaluator:
 
     def eval(
         self,
-        samples: dict[int, dict[int, list[int]]],
+        samples,
+        n_samples: int,
         n_concepts: int,
         thresholds: float | list[float] = 0,
         fpc_map: Optional[dict[int, list[int]]] = None,
@@ -93,7 +104,9 @@ class ConceptEvaluator:
 
                 # eval
                 curr_smi = 0
-                with tqdm(total=len(samples), desc="Processing samples...") as pbar:
+                _state = [None]
+                _advance_sample(samples, _state)
+                with tqdm(total=n_samples, desc="Processing samples...") as pbar:
                     for c in chunks:
                         g = h5f[c]
 
@@ -110,7 +123,8 @@ class ConceptEvaluator:
 
                             e_indices = curr_indices + mol_indptr[-1]
                             # skip if NOT in samples
-                            if curr_smi not in samples:
+                            _curr = _peek_sample(_state)
+                            if (_curr is None) or (_curr[0] != curr_smi):
                                 curr_indptr = e_indptr
                                 curr_indices = e_indices
                                 curr_smi += 1
@@ -120,7 +134,9 @@ class ConceptEvaluator:
                             mol_data = data[curr_indices:e_indices]
 
                             # build labels
-                            ls_dict = samples[curr_smi]
+                            ls_dict = _curr[1]
+                            _advance_sample(samples, _state)
+
                             cs_sele = np.fromiter(ls_dict.keys(), dtype=np.uint32)
 
                             # rebuild labels with fpc given
@@ -216,7 +232,8 @@ class ConceptEvaluator:
 
     def eval_substructure(
         self,
-        samples: dict[int, dict[int, list[int]]],
+        samples,
+        n_samples: int,
         n_concepts: int,
         thresholds: float | list[float] = 0,
         fpc_map: Optional[dict[int, list[int]]] = None,
@@ -259,7 +276,9 @@ class ConceptEvaluator:
 
                 # eval
                 curr_smi = 0
-                with tqdm(total=len(samples), desc="Processing samples...") as pbar:
+                _state = [None]
+                _advance_sample(samples, _state)
+                with tqdm(total=n_samples, desc="Processing samples...") as pbar:
                     for c in chunks:
                         g = h5f[c]
 
@@ -276,7 +295,8 @@ class ConceptEvaluator:
 
                             e_indices = curr_indices + mol_indptr[-1]
                             # skip if NOT in samples
-                            if curr_smi not in samples:
+                            _curr = _peek_sample(_state)
+                            if (_curr is None) or (_curr[0] != curr_smi):
                                 curr_indptr = e_indptr
                                 curr_indices = e_indices
                                 curr_smi += 1
@@ -286,7 +306,9 @@ class ConceptEvaluator:
                             mol_data = data[curr_indices:e_indices]
 
                             # build labels
-                            ls_dict = samples[curr_smi]
+                            ls_dict = _curr[1]
+                            _advance_sample(samples, _state)
+
                             cs_sele = np.fromiter(ls_dict.keys(), dtype=np.uint32)
 
                             # rebuild labels with fpc given
@@ -411,7 +433,8 @@ class ConceptEvaluator:
 
 def calculate_smd(
     acts_h5_pth: str,
-    samples: dict[int, dict[int, list[int]]],
+    samples,
+    n_samples: int,
     n_concepts: int,
     use_pooling: bool = False, # set 'True' if concept span across tokens
     eps: float = 1e-6
@@ -423,10 +446,14 @@ def calculate_smd(
         cm_args = dict(shape=(n_concepts, n_features), dtype=np.float32)
         neg_arr, pos_arr = np.zeros(**cm_args), np.zeros(**cm_args)
         neg_sq_arr, pos_sq_arr = np.zeros(**cm_args), np.zeros(**cm_args)
-        ctr = np.zeros((n_concepts, 2), dtype=np.uint32) # ctr[:, 0]: 'neg'; ctr[:, 1]: 'pos'
+
+        # ctr[:, 0]: 'neg'; ctr[:, 1]: 'pos'
+        ctr = np.zeros((n_concepts, 2), dtype=np.uint32)
 
         curr_smi = 0
-        with tqdm(total=len(samples), desc="Processing sample...", leave=False) as pbar:
+        _state = [None]
+        _advance_sample(samples, _state)
+        with tqdm(total=n_samples, desc="Processing sample...", leave=False) as pbar:
             for c in chunks:
                 g = h5f[c]
 
@@ -442,65 +469,64 @@ def calculate_smd(
                     mol_indptr = indptr[curr_indptr: e_indptr]
                     e_indices = curr_indices + mol_indptr[-1]
 
-                    if curr_smi not in samples:
-                        curr_indptr = e_indptr
-                        curr_indices = e_indices
-                        curr_smi += 1
-                        continue
+                    _curr = _peek_sample(_state)
+                    if (_curr is not None) and (_curr[0] == curr_smi):
+                        mol_indices = indices[curr_indices:e_indices]
+                        mol_data = data[curr_indices:e_indices]
 
-                    mol_indices = indices[curr_indices:e_indices]
-                    mol_data = data[curr_indices:e_indices]
+                        # rebuild activations
+                        acts = csc_matrix(
+                            (mol_data, mol_indices, mol_indptr),
+                            shape=(nt, n_features)
+                        ).toarray()
 
-                    # rebuild activations
-                    acts = csc_matrix(
-                        (mol_data, mol_indices, mol_indptr),
-                        shape=(nt, n_features)
-                    ).toarray()
+                        # labels
+                        ls_dict = _curr[1]
+                        _advance_sample(samples, _state)
 
-                    # labels
-                    ls_dict = samples[curr_smi]
-                    n_ls = len(ls_dict)
-                    cs_sele = np.fromiter(ls_dict.keys(), dtype=np.uint16)
+                        n_ls = len(ls_dict)
+                        cs_sele = np.fromiter(ls_dict.keys(), dtype=np.uint16)
 
-                    if use_pooling:
-                        # pooled activations
-                        rows = []
-                        cols = []
-                        n_lpr = []
+                        if use_pooling:
+                            # pooled activations
+                            rows = []
+                            cols = []
+                            n_lpr = []
 
-                        # explode label across rows
-                        rowptr = 0
-                        for ls in ls_dict.values():
-                            for l in ls:
-                                rows.extend([rowptr] * len(l))
-                                cols.extend(l)
-                                rowptr += 1
-                            n_lpr.append(len(ls))
+                            # explode label across rows
+                            rowptr = 0
+                            for ls in ls_dict.values():
+                                for l in ls:
+                                    rows.extend([rowptr] * len(l))
+                                    cols.extend(l)
+                                    rowptr += 1
+                                n_lpr.append(len(ls))
 
-                        cs_sele = np.repeat(cs_sele, n_lpr)
-                        rows = np.array(rows, dtype=np.uint32)
-                        cols = np.array(cols, dtype=np.uint32)
-                    else:
-                        # token-wise activations
-                        ls = list(ls_dict.values())
-                        rows = np.repeat(range(n_ls), [len(l) for l in ls])
-                        cols = np.concatenate(ls)
+                            cs_sele = np.repeat(cs_sele, n_lpr)
+                            rows = np.array(rows, dtype=np.uint32)
+                            cols = np.array(cols, dtype=np.uint32)
+                        else:
+                            # token-wise activations
+                            ls = list(ls_dict.values())
+                            rows = np.repeat(range(n_ls), [len(l) for l in ls])
+                            cols = np.concatenate(ls)
 
-                    # build labels
-                    label = np.zeros((cs_sele.size, nt), dtype=np.float32)
-                    label[rows, cols] = 1
+                        # build labels
+                        label = np.zeros((cs_sele.size, nt), dtype=np.float32)
+                        label[rows, cols] = 1
 
-                    # fast smd
-                    fast_dense_eval_smd(
-                        neg_arr, pos_arr, neg_sq_arr, pos_sq_arr,
-                        ctr, nt, mol_indptr, cs_sele,
-                        label, acts, use_pooling
-                    )
+                        # fast smd
+                        fast_dense_eval_smd(
+                            neg_arr, pos_arr, neg_sq_arr, pos_sq_arr,
+                            ctr, nt, mol_indptr, cs_sele,
+                            label, acts, use_pooling
+                        )
+
+                        pbar.update()
 
                     curr_indptr = e_indptr
                     curr_indices = e_indices
                     curr_smi += 1
-                    pbar.update()
 
     neg_mean = neg_arr / ctr[:, [0]]
     pos_mean = pos_arr / ctr[:, [1]]

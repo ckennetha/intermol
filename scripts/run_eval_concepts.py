@@ -1,9 +1,8 @@
 import click
 import polars as pl
 
-from collections import defaultdict
 from pathlib import Path
-from typing import Optional
+from typing import Optional, Generator
 
 from intermol.interp.eval_utils import calculate_smd, ConceptEvaluator
 
@@ -17,12 +16,12 @@ def prep_data(
     concept_colname: str,
     label_colname: str,
     mapping: dict[str, int],
-    batch_size: int = 65536,
+    batch_size: int = 8192,
     is_sampling: bool = False,
     fraction_sampling: Optional[float] = 0.20,
     seed_sampling: Optional[int] = 42,
     concepts_from_fpc: Optional[list[int]] = None
-) -> dict[int, dict[int, list[int]]]:
+) -> tuple[Generator[tuple[int, dict[int, list]], None, None], int]:
     # parse data_df
     data_df = pl.scan_parquet(data_path)
 
@@ -46,7 +45,7 @@ def prep_data(
         sampled = (
             data_df
             .select(pl.col(sample_colname))
-            .unique().collect()
+            .unique(maintain_order=True).collect()
             .sample(
                 fraction=fraction_sampling,
                 with_replacement=False,
@@ -58,11 +57,29 @@ def prep_data(
 
     # pack data
     print("Packing data...")
-    p_data = defaultdict(dict)
-    for b in data_df.collect_batches(chunk_size=batch_size, maintain_order=True):
-        for r in b.iter_rows(named=True):
-            p_data[r[sample_colname]][r["concept_idx"]] = r[label_colname]
-    return dict(p_data)
+    grp_data = (
+        data_df
+        .group_by(sample_colname, maintain_order=True)
+        .agg(
+            pl.col("concept_idx"),
+            pl.col(label_colname).alias("label")
+        )
+        .sort(sample_colname)
+    )
+
+    # pass prop for tqdm
+    n_samples = data_df.select(pl.col(sample_colname).n_unique()).collect().item()
+
+    def _sample_gen():
+        for batch in grp_data.collect_batches(chunk_size=batch_size):
+            s = batch[sample_colname].to_list()
+            c = batch["concept_idx"].to_list()
+            l = batch["label"].to_list()
+            for i in range(len(s)):
+                yield s[i], dict(zip(c[i], l[i]))
+            del s, c, l, batch
+
+    return _sample_gen(), n_samples
 
 # only supports csv and its derivative formats
 def prep_labels(
@@ -174,7 +191,7 @@ def prep_fpc(
 
 # eval options
 @click.option(
-    "--thresholds", nargs=-1, type=float,
+    "--thresholds", multiple=True, type=float,
     help="Thresholds for evaluation (pass multiple). Default: 0."
 )
 @click.option(
@@ -186,8 +203,8 @@ def prep_fpc(
     help="Run SAE latent prefiltering with SMD instead of full evaluation."
 )
 @click.option(
-    "--batch-size", default=65536, type=int,
-    help="Batch size for data packing and evaluation. Default: 65536."
+    "--batch-size", default=8192, type=int,
+    help="Batch size for data packing and evaluation. Default: 8192."
 )
 
 # fpc options (if provided)
@@ -241,7 +258,7 @@ def main(**cli_kwargs):
 
     # build data
     bsz = cli_kwargs["batch_size"]
-    data = prep_data(
+    data, n_samples = prep_data(
         cli_kwargs["data_path"],
         cli_kwargs["sample_colname"],
         concept_colname,
@@ -259,7 +276,7 @@ def main(**cli_kwargs):
     use_pooling = cli_kwargs["use_pooling"]
 
     if is_prefilter:
-        out = calculate_smd(acts_h5_path, data, n_concepts, use_pooling)
+        out = calculate_smd(acts_h5_path, data, n_samples, n_concepts, use_pooling)
 
         # build out_df
         out_df = pl.DataFrame(out)
@@ -271,10 +288,12 @@ def main(**cli_kwargs):
         evaluator = ConceptEvaluator(acts_h5_path, bsz)
         if use_pooling:
             out = evaluator.eval_substructure(
-                data, n_concepts, thresholds, fpc_map, n_fpc
+                data, n_samples, n_concepts, thresholds, fpc_map, n_fpc
             )
         else:
-            out = evaluator.eval(data, n_concepts, thresholds, fpc_map, n_fpc)
+            out = evaluator.eval(
+                data, n_samples, n_concepts, thresholds, fpc_map, n_fpc
+            )
 
         # build out_df
         out_df = pl.DataFrame(out).with_columns(pl.col(pl.Float64).round(4))

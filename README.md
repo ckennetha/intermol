@@ -124,7 +124,7 @@ options:
                                         spanning multiple tokens
     --is-prefilter                      Run SAE latent prefiltering with SMD
                                         instead of full evaluation
-    --batch-size BATCH_SIZE             Batch size for evaluation. Default: 65536
+    --batch-size BATCH_SIZE             Batch size for evaluation. Default: 8192
 
     post-prefiltering options:
     --score-threshold SCORE_THRESHOLD   Minimum SMD score threshold. Default: 0
