@@ -198,8 +198,6 @@ class ConceptEvaluator:
                             curr_smi += 1
 
                             pbar.update()
-                            # update confusion matrix
-                            self.cm.flush()
 
                         # early stop
                         if pbar.n == pbar.total:
@@ -209,6 +207,8 @@ class ConceptEvaluator:
                 mol_indptr, mol_indices, mol_data,
                 cs_sele, fs_sele, p_sele
             )
+
+            self.cm.flush()
 
             nr = self.cm.shape[0]
             nb = math.ceil(nr / self.batch_size)
@@ -399,7 +399,6 @@ class ConceptEvaluator:
                             curr_smi += 1
 
                             pbar.update()
-                            self.cm.flush()
 
                         # early stop
                         if pbar.n == pbar.total:
@@ -409,6 +408,8 @@ class ConceptEvaluator:
                 mol_indptr, mol_indices, mol_data,
                 cs_sele, fs_sele, p_sele
             )
+
+            self.cm.flush()
 
             nr = self.cm.shape[0]
             nb = math.ceil(nr / self.batch_size)
@@ -636,8 +637,18 @@ def collect_fpc(
 
     # build selection mask and collect features and concepts
     mask = np.zeros(nk, dtype=np.bool_)
-    cs_sele_out, fs_sele = set(), set()
-    cs_no_sele, fs_no_sele = [], set()
+
+    # typing
+    _c0 = k_fpc[0]
+    _f0 = p_fpc[0, 0]
+
+    cs_sele_out, fs_sele = {_c0}, {_f0}
+    cs_sele_out.clear()
+    fs_sele.clear()
+
+    cs_no_sele, fs_no_sele = [_c0], {_f0}
+    cs_no_sele.clear()
+    fs_no_sele.clear()
 
     for k_i in range(nk):
         c = k_fpc[k_i]

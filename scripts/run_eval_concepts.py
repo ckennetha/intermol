@@ -103,25 +103,37 @@ def prep_labels(
 
 # build fpc map from 'calculate_smd' output; only supports tsv
 def prep_fpc(
-    fpc_path: str, score_threshold: float = 0, k: int = 64
+    fpc_path: str,
+    score_colname: Optional[str] = None,
+    score_threshold: float = 0,
+    k: int = 64
 ) -> tuple[list[int], dict[int, list[int]], pl.DataFrame]:
     # parse fpc_df
     fpc_df = pl.read_csv(fpc_path, separator="\t")
+
+    if score_colname is not None:
+        fpc_df = (
+            fpc_df
+            .filter(
+                (pl.col(score_colname).is_not_nan()) &
+                (pl.col(score_colname) > score_threshold)
+            )
+            .select(
+                pl.all().top_k_by(score_colname, k=k)
+                .over("conceptIdx", mapping_strategy="explode")
+            )
+        )
+    else:
+        fpc_df = fpc_df.unique(["conceptIdx", "featureIdx"])
+
     fpc_df = (
         fpc_df
-        .filter(
-            (pl.col("smd").is_not_nan()) &
-            (pl.col("smd") > score_threshold)
-        )
-        .select(
-            pl.all().top_k_by("smd", k=k)
-            .over("conceptIdx", mapping_strategy="explode")
-        )
         .sort(
             ["conceptIdx", "featureIdx"],
             descending=[False, False]
         )
-        .group_by("conceptIdx").agg(pl.col("featureIdx"))
+        .group_by("conceptIdx", maintain_order=True)
+        .agg(pl.col("featureIdx"))
     )
 
     concepts = fpc_df["conceptIdx"].to_list()
@@ -209,6 +221,11 @@ def prep_fpc(
 
 # fpc options (if provided)
 @click.option(
+    "--score-colname", required=False, type=str, default=None,
+    help="Score column name for filtering. " \
+    "Set to 'smd' when using --is-prefilter output."
+)
+@click.option(
     "--score-threshold", default=0.0, type=float,
     help="Minimum SMD score threshold for fpc. Default: 0."
 )
@@ -253,7 +270,10 @@ def main(**cli_kwargs):
     concepts_from_fpc, fpc_map, fpc_lookup = None, None, None
     if fpc_path is not None:
         concepts_from_fpc, fpc_map, fpc_lookup = prep_fpc(
-            fpc_path, cli_kwargs["score_threshold"], cli_kwargs["k"]
+            fpc_path,
+            cli_kwargs["score_colname"],
+            cli_kwargs["score_threshold"],
+            cli_kwargs["k"]
         )
 
     # build data

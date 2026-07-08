@@ -94,6 +94,7 @@ usage: run-eval-concepts [-h] --data-path DATA_PATH --acts-h5-path ACTS_H5_PATH
                          [--fpc-path FPC_PATH] [--desc-colname DESC_COLNAME]
                          [--thresholds THRESHOLDS] [--use-pooling]
                          [--is-prefilter] [--batch-size BATCH_SIZE]
+                         [--score-colname SCORE_COLNAME]
                          [--score-threshold SCORE_THRESHOLD] [--k K]
                          [--is-sampling] [--fraction-sampling FRACTION_SAMPLING]
                          [--seed-sampling SEED_SAMPLING]
@@ -102,13 +103,12 @@ options:
     -h, --help                          show this help message and exit
 
     path options:
-    --data-path DATA_PATH                 Path to input .parquet file
-    --acts-h5-path ACTS_H5_PATH           Path to precomputed activations .h5 file
-    --label-path LABEL_PATH               Path to concept label .tsv file
-    --outdir-path OUTDIR_PATH             Output directory
+    --data-path DATA_PATH               Path to input .parquet file
+    --acts-h5-path ACTS_H5_PATH         Path to precomputed activations .h5 file
+    --label-path LABEL_PATH             Path to concept label .tsv file
+    --outdir-path OUTDIR_PATH           Output directory
     --outfn OUTFN                       Output filename (without extension)
-    --fpc-path FPC_PATH                   Path to prefiltering output. If not provided,
-                                        concepts are evaluated across all SAE latents
+    --fpc-path FPC_PATH                 Path to prefiltering output. If not provided, concepts are evaluated across all SAE latents
     column name options:
     --sample-colname SAMPLE_COLNAME     Column name for samples
     --concept-colname CONCEPT_COLNAME   Column name for concepts (must match in
@@ -118,8 +118,7 @@ options:
     --desc-colname DESC_COLNAME         Column name for concept descriptions (optional)
 
     evaluation options:
-    --thresholds THRESHOLDS             Thresholds for evaluation (pass multiple).
-                                        Default: 0
+    --thresholds THRESHOLDS             Thresholds for evaluation (pass multiple). Default: 0
     --use-pooling                       Use pooling-based evaluation for concepts
                                         spanning multiple tokens
     --is-prefilter                      Run SAE latent prefiltering with SMD
@@ -127,6 +126,7 @@ options:
     --batch-size BATCH_SIZE             Batch size for evaluation. Default: 8192
 
     post-prefiltering options:
+    --score-colname SCORE_COLNAME       Score column name for filtering. Set to 'smd' when using --is-prefilter output.
     --score-threshold SCORE_THRESHOLD   Minimum SMD score threshold. Default: 0
     --k K                               Top-k features per concept. Default: 64
 
@@ -157,7 +157,7 @@ run-eval-concepts \
 ```
 
 #### SAE Latent-Concept Association
-To run association analysis on single-token concepts, remove the `--is-prefilter` flag. If `--fpc-path` is supplied with prefiltering output, set `--score-threshold` to filter by SMD score and `--k` for the number of top-k latents. As before, set `--use-pooling` for multi-token concepts.
+To run association analysis on single-token concepts, remove the `--is-prefilter` flag. If `--fpc-path` is supplied with prefiltering output, set `--score-colname` to specify the score column (e.g., 'smd'), `--score-threshold` to filter by SMD score, and `--k` for the number of top-k latents. If `--fpc-path` is supplied with the ConceptEvaluator output, omit these args. As before, set `--use-pooling` for multi-token concepts.
 ```bash
 run-eval-concepts \
     --data-path valid_dataset.parquet \
@@ -171,6 +171,7 @@ run-eval-concepts \
     --index-colname id \
     --label-colname token_idxs \
     --thresholds 0 0.1 0.2 0.35 0.5 0.6 0.8 \
+    --score-colname smd \
     --score-threshold 0 \
     --k 64
 ```
