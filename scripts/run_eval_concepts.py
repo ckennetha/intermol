@@ -4,7 +4,7 @@ import polars as pl
 from pathlib import Path
 from typing import Optional, Generator
 
-from intermol.interp.eval_utils import calculate_smd, ConceptEvaluator
+from intermol.interp.eval_utils import calculate_concept_smd, ConceptEvaluator
 
 # config
 pl.Config.set_engine_affinity(engine="streaming")
@@ -101,7 +101,7 @@ def prep_labels(
         desc_to_idx_map_r = dict(zip(index_list, label_df[desc_colname].to_list()))
     return concept_to_idx_map, desc_to_idx_map_r
 
-# build fpc map from 'calculate_smd' output; only supports tsv
+# build fpc map from 'calculate_concept_smd' output; only supports tsv
 def prep_fpc(
     fpc_path: str,
     score_colname: Optional[str] = None,
@@ -176,7 +176,7 @@ def prep_fpc(
 )
 @click.option(
     "--fpc-path", required=False, type=click.Path(exists=True), default=None,
-    help="Path to 'calculate_smd' or prefiltering output (optional). " \
+    help="Path to 'calculate_concept_smd' or prefiltering output (optional). " \
     "If not provided, concepts will be evaluated across all SAE latents."
 )
 
@@ -296,7 +296,7 @@ def main(**cli_kwargs):
     use_pooling = cli_kwargs["use_pooling"]
 
     if is_prefilter:
-        out = calculate_smd(acts_h5_path, data, n_samples, n_concepts, use_pooling)
+        out = calculate_concept_smd(acts_h5_path, data, n_samples, n_concepts, use_pooling)
 
         # build out_df
         out_df = pl.DataFrame(out)
