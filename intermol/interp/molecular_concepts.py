@@ -44,6 +44,8 @@ class AtomInSubstructureSMARTS:
 
         out = []
         for ra_idx in atom_idxs:
+            ra = mol.GetAtomWithIdx(ra_idx)
+            out.append(ra.GetSmarts())
             for rad in range(1, self.radius + 1):
                 bn_idxs = set(Chem.FindAtomEnvironmentOfRadiusN(mol, rad, ra_idx))
 
@@ -76,7 +78,8 @@ class AtomInSubstructureSMARTS:
             atom_visit = set()
         atom_visit.add(root_atom_idx)
 
-        root_atom_str = tokens[atom_idx_to_token_idx_map[root_atom_idx]]
+        root_atom = mol.GetAtomWithIdx(root_atom_idx)
+        root_atom_str = root_atom.GetSmarts()
 
         child_strs = sorted(
             sym + self._build_tree(
