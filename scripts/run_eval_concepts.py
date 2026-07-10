@@ -4,7 +4,7 @@ import polars as pl
 from pathlib import Path
 from typing import Optional, Generator
 
-from intermol.interp.eval_utils import calculate_concept_smd, ConceptEvaluator
+from intermol.interp.eval import calculate_concept_smd, ConceptEvaluator
 
 # config
 pl.Config.set_engine_affinity(engine="streaming")

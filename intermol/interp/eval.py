@@ -396,11 +396,12 @@ class ConceptEvaluator:
                 eb = min(sb + self.batch_size, nr)
 
                 cm_b = self.cm[sb:eb]
+                tp_substruct_b = tp_substruct[sb:eb]
                 rgs = (sb, eb)
                 outs.extend(
                     score_concepts(
                         cm_b, thresholds, rgs, n_features, use_fpc, n_fpc,
-                        is_substruct=True, tp_substruct=tp_substruct,
+                        is_substruct=True, tp_substruct=tp_substruct_b,
                         ctr_substruct=ctr_substruct
                     )
                 )
