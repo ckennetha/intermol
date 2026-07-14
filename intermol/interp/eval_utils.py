@@ -20,23 +20,8 @@ class Metrics:
     f1Score: float
     tPosSub: int = 0
 
-@dataclass
-class SMDConceptOutput:
-    conceptIdx: int
-    featureIdx: int
-    smd: float
-
-@dataclass
-class SMDReprOutput:
-    feature: int
-    group: str
-    smd: float
-    refHi: int
-    altHi: int
-
 
 # utils
-
 ## ConceptEvaluator
 ### collect pairs, concepts, and features
 @njit(cache=True)

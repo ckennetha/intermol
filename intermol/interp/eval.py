@@ -418,7 +418,7 @@ def calculate_concept_smd(
     n_concepts: int,
     use_pooling: bool = False, # set 'True' if concept span across tokens
     eps: float = 1e-6
-) -> list[SMDConceptOutput]:
+) -> dict[str, np.ndarray]:
     with h5py.File(acts_h5_path, 'r') as h5f:
         chunks = h5_chunk_sorter(list(h5f.keys()))
         n_features = h5f.attrs['num_features']
@@ -517,18 +517,12 @@ def calculate_concept_smd(
 
     smd = (pos_mean - neg_mean) / (std + eps)
     cs_sz, fs_sz = smd.shape
-    outs = []
-    for c_i in range(cs_sz):
-        smd_c = smd[c_i, :].tolist()
-        for f in range(fs_sz):
-            outs.append(
-                SMDConceptOutput(
-                    conceptIdx=c_i,
-                    featureIdx=f,
-                    smd=smd_c[f]
-                )
-            )
-    return outs
+
+    return {
+        "conceptIdx": np.repeat(np.arange(cs_sz, dtype=np.uint32), fs_sz),
+        "featureIdx": np.tile(np.arange(fs_sz, dtype=np.uint32), cs_sz),
+        "smd": smd.ravel()
+    }
 
 ## to measure latent effect size across string representations
 def calculate_repr_smd(
@@ -537,7 +531,7 @@ def calculate_repr_smd(
     alt_acts_h5_path: str,
     alt_end_map: list[int],
     alt_group_maps: Optional[list[dict[int, int]]] = None
-) -> list[SMDReprOutput]:
+) -> dict[str, np.ndarray]:
     ref_sample_idxs = set(ref_sample_map.keys())
     n_ref_samples = len(ref_sample_map)
 
@@ -661,16 +655,10 @@ def calculate_repr_smd(
     ref_max_hi = (ref_max[:, None, :] > alt_max).sum(axis=0)
     alt_max_hi = (alt_max > ref_max[:, None, :]).sum(axis=0)
 
-    outs = []
-    for g in range(n_alt_groups):
-        for f in range(n_features):
-            outs.append(
-                SMDReprOutput(
-                    feature=f,
-                    group=str(g),
-                    smd=smd_max[g, f],
-                    refHi=ref_max_hi[g, f],
-                    altHi=alt_max_hi[g, f]
-                )
-            )
-    return outs
+    return {
+        "feature": np.tile(np.arange(n_features, dtype=np.uint32), n_alt_groups),
+        "group": np.repeat(np.arange(n_alt_groups), n_features),
+        "smd": smd_max.ravel(),
+        "refHi": ref_max_hi.ravel(),
+        "altHi": alt_max_hi.ravel()
+    }
