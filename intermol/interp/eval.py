@@ -576,8 +576,8 @@ def calculate_repr_smd(
                         pbar.update()
 
                     curr_indptr = end_indptr
-                    curr_data   = end_data
-                    curr_smi   += 1
+                    curr_data = end_data
+                    curr_smi += 1
 
                 # early stop
                 if pbar.n == pbar.total:
@@ -604,13 +604,13 @@ def calculate_repr_smd(
             g = h5f[cn]
             molptr = g["molptr"][:]
             indptr = g["indptr"][:]
-            data   = g["data"][:]
+            data = g["data"][:]
 
             curr_indptr = curr_data = 0
             for _ in molptr:
                 end_indptr = curr_indptr + n_features + 1
                 mol_indptr = indptr[curr_indptr:end_indptr]
-                end_data   = curr_data + mol_indptr[-1]
+                end_data = curr_data + mol_indptr[-1]
 
                 grp = group_map[count_alt] if group_map is not None else 0
                 nz_mask = np.diff(mol_indptr) > 0

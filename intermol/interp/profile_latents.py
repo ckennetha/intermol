@@ -231,16 +231,16 @@ def get_latent_token_preference(
         if use_molformer:
             ctr_grp = {}
             for tk, tk_cnt in zip(nz_tks, nz_cs):
-                if _RX_ATOM.search(tk):
-                    grp = "Atom"
-                elif _RX_BRANCH.fullmatch(tk):
+                if _RX_BRANCH.fullmatch(tk):
                     grp = "Branch"
                 elif _RX_RING.fullmatch(tk):
                     grp = "Ring"
                 elif _RX_BOND.fullmatch(tk):
                     grp = "Bond"
-                else:
+                elif tk == ".":
                     grp = "Disconnection"
+                else:
+                    grp = "Atom"
                 ctr_grp[grp] = ctr_grp.get(grp, 0) + tk_cnt
             ctr_grp = dict(sorted(
                 ctr_grp.items(), key=lambda x: x[1], reverse=True
