@@ -1,5 +1,4 @@
 import re
-import bisect
 
 from collections import defaultdict
 from rdkit import Chem
@@ -178,39 +177,39 @@ def map_atom_idx_to_token_idx(tokens: list[str]) -> dict[int, int]:
     return mapping
 
 ## map bond token indices to the corresp. paired atom indices
+## branch stack => bond after ')' binds to the branch root, not the atom inside the branch
+## ring digits => bond token before an opening/closing digit binds to the ring-closure pair
 def map_bond_token_idx_to_pair_atom_idx(
     tokens: list[str], token_idx_to_atom_idx_map: dict[int, int]
-) -> dict[int, int]:
-    n_tokens = len(tokens)
-    atom_token_pos = list(token_idx_to_atom_idx_map.keys())
+) -> dict[int, tuple[int, int]]:
     mapping = {}
-
-    cp_ring_idxs = set()
-    cp_ring_idx_atom = {}
+    branch_stack = []
+    rings = {}
+    prev_at_i, pend_bond = None, None
     for tk_i, tk in enumerate(tokens):
-        if _RX_RING.fullmatch(tk):
-            if tk not in cp_ring_idxs:
-                # within ring
-                cp_ring_idxs.add(tk)
-                ins = bisect.bisect_left(atom_token_pos, tk_i)
-                cp_ring_idx_atom[tk] = atom_token_pos[ins - 1]
+        if tk_i in token_idx_to_atom_idx_map:
+            at_i = token_idx_to_atom_idx_map[tk_i]
+            if pend_bond is not None:
+                mapping[pend_bond] = (prev_at_i, at_i)
+            prev_at_i, pend_bond = at_i, None
+        elif _RX_BOND.fullmatch(tk):
+            pend_bond = tk_i
+        elif _RX_RING.fullmatch(tk):
+            if tk not in rings:
+                rings[tk] = (prev_at_i, pend_bond)
             else:
-                # outside ring
-                cp_ring_idxs.discard(tk)
-            continue
-
-        if _RX_BOND.fullmatch(tk):
-            ins = bisect.bisect_left(atom_token_pos, tk_i)
-            left_at_i = token_idx_to_atom_idx_map[atom_token_pos[ins - 1]]
-
-            next_tk = tokens[tk_i + 1] if (tk_i + 1) < n_tokens else None
-            right_at_i = (
-                token_idx_to_atom_idx_map[cp_ring_idx_atom[next_tk]]
-                if next_tk in cp_ring_idxs
-                else token_idx_to_atom_idx_map[atom_token_pos[ins]]
-            )
-
-            mapping[tk_i] = (left_at_i, right_at_i)
+                open_at_i, open_bond = rings.pop(tk)
+                if open_bond is not None:
+                    mapping[open_bond] = (open_at_i, prev_at_i)
+                if pend_bond is not None:
+                    mapping[pend_bond] = (prev_at_i, open_at_i)
+            pend_bond = None
+        elif tk == "(":
+            branch_stack.append(prev_at_i)
+        elif tk == ")":
+            prev_at_i = branch_stack.pop()
+        elif tk == ".":
+            prev_at_i = None
     return mapping
 
 ## list all branch points in the SMILES
